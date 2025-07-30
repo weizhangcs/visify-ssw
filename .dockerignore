@@ -32,9 +32,4 @@ Thumbs.db
 *.log
 
 # 媒体和上传文件 (这些文件应由Nginx或外部存储提供，而不是打包在应用镜像内)
-batch_uploads/
-l1_outputs/
-l2_l3_outputs/
-source_files/
-temp_modeler_inputs/
-temp_processed/
+/media_root/

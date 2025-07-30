@@ -39,23 +39,8 @@ htmlcov/
 
 # --- Visify Story Studio Workbench 特定规则 ---
 
-# [cite_start]批量上传的临时文件 [cite: 474-486]
-batch_uploads/
+# 统一忽略所有在 media_root 目录下的用户上传和系统生成的文件
+/media_root/
 
-# [cite_start]第一层标注的产出物 [cite: 487-489]
-l1_outputs/
-
-# [cite_start]第二、三层标注的产出物 [cite: 490]
-l2_l3_outputs/
-
-# [cite_start]Django FileField 的默认上传目录 [cite: 492-511]
-source_files/
-
-# [cite_start]Script Modeler 的临时输入目录 [cite: 512]
-temp_modeler_inputs/
-
-# [cite_start]视频转码等处理后的临时文件 [cite: 512]
-temp_processed/
-
-# [cite_start]您用于生成文件清单的临时文件 [cite: 521]
+# 您用于生成文件清单的临时文件
 files.txt
