@@ -63,7 +63,6 @@ services:
     command: celery -A visify_ssw worker -l info
     volumes:
       - .:/app
-      - processed_media_volume:/app/media_root/processed_files
     environment: *django_env
     depends_on:
       - web
@@ -75,16 +74,16 @@ services:
       - "9999:80"
     volumes:
       - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
-      - processed_media_volume:/var/www/processed_media:ro
+      - ./media_root:/var/www/media_root:ro
 
-  subeditor:
-    build:
+  #subeditor:
+    #build:
       # build 的上下文指向你的 aimu.app 项目的路径
       # 请确保这里的相对路径是正确的
-      context: D:\DevProjects\WebstormProjects\vss-sub-editor
-    container_name: vss-subeditor
-    ports:
-      - "3000:3000"
+      #context: D:\DevProjects\WebstormProjects\vss-sub-editor
+    #container_name: vss-subeditor
+    #ports:
+      #- "3000:3000"
     # 注意：因为我们使用了生产构建，热重载不再有效
     # 如果需要修改前端代码，需要重新构建此服务
 
@@ -103,5 +102,4 @@ services:
 
 volumes:
   postgres_data:
-  processed_media_volume:
   label_studio_data:

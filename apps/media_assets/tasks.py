@@ -13,6 +13,7 @@ from django.conf import settings
 from django.core.files.base import ContentFile
 from pathlib import Path
 from .services.modeling.script_modeler import ScriptModeler
+from .services.storage import StorageService
 
 class ProgressLogger:
     def __init__(self, filename):
@@ -62,7 +63,7 @@ def process_media_asset(asset_id):
         processed_filename = f"{asset.id}.mp4"
         processed_video_path = os.path.join(temp_dir, processed_filename)
 
-        ffmpeg_command = ['ffmpeg', '-i', source_video_path, '-c:v', 'libx264', '-b:v', '2M', '-preset', 'fast', '-y',
+        ffmpeg_command = ['ffmpeg', '-i', source_video_path, '-c:v', 'libx264', '-b:v', settings.FFMPEG_VIDEO_BITRATE, '-preset', settings.FFMPEG_VIDEO_PRESET, '-y',
                           processed_video_path]
         print(f"执行 FFmpeg 命令: {' '.join(ffmpeg_command)}")
         subprocess.run(ffmpeg_command, check=True, capture_output=True, text=True)
@@ -73,7 +74,7 @@ def process_media_asset(asset_id):
         s3_client = boto3.client('s3', region_name=settings.AWS_S3_REGION_NAME)
 
         # 上传处理后的视频
-        video_s3_key = f"processed_videos/{processed_filename}"
+        video_s3_key = f"{settings.AWS_S3_PROCESSED_VIDEOS_PREFIX}{processed_filename}"
         video_progress = ProgressLogger(processed_video_path)
         s3_client.upload_file(processed_video_path, settings.AWS_STORAGE_BUCKET_NAME, video_s3_key,Callback=video_progress)
         video_cdn_url = f"https://{settings.AWS_S3_CUSTOM_DOMAIN}/{video_s3_key}"
@@ -83,7 +84,7 @@ def process_media_asset(asset_id):
         srt_cdn_url = None
         if source_srt_path:
             srt_filename = os.path.basename(source_srt_path)
-            srt_s3_key = f"source_subtitles/{asset.id}/{srt_filename}"
+            srt_s3_key = f"{settings.AWS_S3_SOURCE_SUBTITLES_PREFIX}{asset.id}/{srt_filename}"
             srt_progress = ProgressLogger(source_srt_path)
             s3_client.upload_file(source_srt_path, settings.AWS_STORAGE_BUCKET_NAME, srt_s3_key,Callback=srt_progress)
             srt_cdn_url = f"https://{settings.AWS_S3_CUSTOM_DOMAIN}/{srt_s3_key}"
@@ -308,36 +309,21 @@ def ingest_media_files(media_id):
             os.makedirs(temp_dir, exist_ok=True)
             processed_filename = f"{asset.id}.mp4"
             processed_video_path = os.path.join(temp_dir, processed_filename)
-            ffmpeg_command = ['ffmpeg', '-i', str(video_path), '-c:v', 'libx264', '-b:v', '2M', '-preset', 'fast', '-y',
+            ffmpeg_command = ['ffmpeg', '-i', str(video_path), '-c:v', 'libx264', '-b:v', settings.FFMPEG_VIDEO_BITRATE, '-preset', settings.FFMPEG_VIDEO_PRESET, '-y',
                               processed_video_path]
             subprocess.run(ffmpeg_command, check=True, capture_output=True, text=True)
             print(f"FFmpeg 处理成功 for Asset {asset.id}")
 
-            # ii. 存储后端决策
-            video_url = None
-            srt_url = None
-
-            if settings.STORAGE_BACKEND == 's3':
-                s3_client = boto3.client('s3', region_name=settings.AWS_S3_REGION_NAME)
-                # 上传视频
-                video_s3_key = f"processed_videos/{processed_filename}"
-                s3_client.upload_file(processed_video_path, settings.AWS_STORAGE_BUCKET_NAME, video_s3_key)
-                video_url = f"https://{settings.AWS_S3_CUSTOM_DOMAIN}/{video_s3_key}"
-                # 上传SRT
-                if srt_path.exists():
-                    srt_s3_key = f"source_subtitles/{asset.id}/{srt_path.name}"
-                    s3_client.upload_file(str(srt_path), settings.AWS_STORAGE_BUCKET_NAME, srt_s3_key)
-                    srt_url = f"https://{settings.AWS_S3_CUSTOM_DOMAIN}/{srt_s3_key}"
-            else:  # Local Nginx 模式
-                nginx_dir = "/app/media_root/processed_files"
-                os.makedirs(nginx_dir, exist_ok=True)
-                # 移动视频
-                shutil.move(processed_video_path, os.path.join(nginx_dir, processed_filename))
-                video_url = f"{settings.LOCAL_MEDIA_URL_BASE}/media/{processed_filename}"
-                # 复制SRT
-                if srt_path.exists():
-                    shutil.copy(str(srt_path), os.path.join(nginx_dir, srt_path.name))
-                    srt_url = f"{settings.LOCAL_MEDIA_URL_BASE}/media/{srt_path.name}"
+            # ii. 使用 StorageService 处理文件存储
+            storage_service = StorageService()
+            video_url = storage_service.save_processed_video(
+                local_temp_path=processed_video_path,
+                asset=asset
+            )
+            srt_url = storage_service.save_source_subtitle(
+                local_srt_path=srt_path,
+                asset=asset
+            )
 
             # iii. 回写 Asset 记录
             asset.processed_video_url = video_url

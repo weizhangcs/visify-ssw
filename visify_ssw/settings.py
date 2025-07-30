@@ -24,10 +24,10 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # See https://docs.djangoproject.com/en/4.2/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = 'django-insecure-rjx4-om!ga^*1fji*naw$i60ai*=15p*h!-d@e=*deuj_qty_u'
+SECRET_KEY = config('DJANGO_SECRET_KEY')
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+DEBUG = config('DJANGO_DEBUG', default=True, cast=bool)
 
 ALLOWED_HOSTS = []
 
@@ -130,24 +130,34 @@ USE_TZ = True
 
 STATIC_URL = 'static/'
 
+# Media files (user-uploaded content and generated outputs)
+# https://docs.djangoproject.com/en/4.2/topics/files/
+MEDIA_URL = '/media/'
+MEDIA_ROOT = BASE_DIR / 'media_root'
+
 # Default primary key field type
 # https://docs.djangoproject.com/en/4.2/ref/settings/#default-auto-field
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 # Celery Configuration
-CELERY_BROKER_URL = os.environ.get("CELERY_BROKER_URL", "redis://localhost:6379/0")
-CELERY_RESULT_BACKEND = os.environ.get("CELERY_BROKER_URL", "redis://localhost:6379/0")
+CELERY_BROKER_URL = config("CELERY_BROKER_URL", default="redis://redis:6379/0")
+CELERY_RESULT_BACKEND = config("CELERY_BROKER_URL", default="redis://redis:6379/0")
 CELERY_ACCEPT_CONTENT = ['json']
 CELERY_TASK_SERIALIZER = 'json'
 CELERY_RESULT_SERIALIZER = 'json'
 CELERY_IMPORTS = ('apps.media_assets.tasks',)
 
-AWS_ACCESS_KEY_ID = os.environ.get('AWS_ACCESS_KEY_ID')
-AWS_SECRET_ACCESS_KEY = os.environ.get('AWS_SECRET_ACCESS_KEY')
-AWS_STORAGE_BUCKET_NAME = os.environ.get('AWS_STORAGE_BUCKET_NAME')
-AWS_S3_REGION_NAME = os.environ.get('AWS_S3_REGION_NAME')
-AWS_S3_CUSTOM_DOMAIN = os.environ.get('AWS_S3_CUSTOM_DOMAIN')
+# AWS Credentials
+AWS_ACCESS_KEY_ID = config('AWS_ACCESS_KEY_ID', default='')
+AWS_SECRET_ACCESS_KEY = config('AWS_SECRET_ACCESS_KEY', default='')
+AWS_STORAGE_BUCKET_NAME = config('AWS_STORAGE_BUCKET_NAME', default='')
+AWS_S3_REGION_NAME = config('AWS_S3_REGION_NAME', default='')
+AWS_S3_CUSTOM_DOMAIN = config('AWS_S3_CUSTOM_DOMAIN', default='')
+
+# AWS S3 Path Prefixes
+AWS_S3_PROCESSED_VIDEOS_PREFIX = config('AWS_S3_PROCESSED_VIDEOS_PREFIX', default='processed_videos/')
+AWS_S3_SOURCE_SUBTITLES_PREFIX = config('AWS_S3_SOURCE_SUBTITLES_PREFIX', default='source_subtitles/')
 
 
 # CORS Configuration
@@ -181,11 +191,15 @@ CORS_ALLOW_HEADERS = [
 #     r"^http://localhost:\d+$",
 # ]
 
-SUBEDITOR_URL = os.environ.get("SUBEDITOR_URL", "http://localhost:3000")
-LOCAL_MEDIA_URL_BASE = os.environ.get('LOCAL_MEDIA_URL_BASE', 'http://localhost:8088')
-LABEL_STUDIO_PUBLIC_URL = os.environ.get("LABEL_STUDIO_PUBLIC_URL", "http://localhost:8081")
-SUBEDITOR_PUBLIC_URL = os.environ.get("SUBEDITOR_PUBLIC_URL", "http://localhost:3000")
+SUBEDITOR_URL = config("SUBEDITOR_URL", default="http://subeditor:3000")
+LOCAL_MEDIA_URL_BASE = config('LOCAL_MEDIA_URL_BASE', default='http://localhost:9999')
+LABEL_STUDIO_PUBLIC_URL = config("LABEL_STUDIO_PUBLIC_URL", default="http://localhost:8081")
+SUBEDITOR_PUBLIC_URL = config("SUBEDITOR_PUBLIC_URL", default="http://localhost:3000")
 
 # --- 加载存储后端配置 ---
 # 从 .env 文件读取 STORAGE_BACKEND 的值，如果找不到，则默认为 'local'
-STORAGE_BACKEND = os.environ.get('STORAGE_BACKEND', 'local')
+STORAGE_BACKEND = config('STORAGE_BACKEND', default='local')
+
+# FFmpeg Configuration
+FFMPEG_VIDEO_BITRATE = config('FFMPEG_VIDEO_BITRATE', default='2M')
+FFMPEG_VIDEO_PRESET = config('FFMPEG_VIDEO_PRESET', default='fast')

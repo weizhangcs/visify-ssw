@@ -1,6 +1,8 @@
 import uuid
 from django.db import models
 from django.utils import timezone
+from django.conf import settings
+
 
 class Media(models.Model):
     """
@@ -44,6 +46,13 @@ class Media(models.Model):
 
     def __str__(self):
         return self.title
+
+    def get_label_studio_project_url(self):
+        """返回此媒资在 Label Studio 中的项目主页 URL。"""
+        if not self.label_studio_project_id:
+            return None
+        # 注意：这里我们使用公开的URL，因为它用于生成给用户点击的链接
+        return f"{settings.LABEL_STUDIO_PUBLIC_URL}/projects/{self.label_studio_project_id}"
 
     class Meta:
         verbose_name = "媒资（作品）"
@@ -132,6 +141,29 @@ class Asset(models.Model):
 
     created_at = models.DateTimeField(auto_now_add=True, verbose_name="创建时间")
     updated_at = models.DateTimeField(auto_now=True, verbose_name="更新时间")
+
+    def get_subeditor_url(self):
+        """返回此资产条目在 SubEditor 中的编辑页面 URL。"""
+        if not self.processed_video_url or not self.source_subtitle_url:
+            return None
+
+        subeditor_base_url = settings.SUBEDITOR_PUBLIC_URL
+        video_url = self.processed_video_url
+        srt_url = self.source_subtitle_url
+        asset_id = str(self.id)
+
+        return f"{subeditor_base_url}?videoUrl={video_url}&srtUrl={srt_url}&assetId={asset_id}"
+
+    def get_label_studio_task_url(self):
+        """返回此资产条目在 Label Studio 中的具体任务 URL。"""
+        if not self.media.label_studio_project_id or not self.label_studio_task_id:
+            return None
+
+        project_id = self.media.label_studio_project_id
+        task_id = self.label_studio_task_id
+
+        # 注意：这里我们使用公开的URL
+        return f"{settings.LABEL_STUDIO_PUBLIC_URL}/projects/{project_id}/data?tab={task_id}&task={task_id}"
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)

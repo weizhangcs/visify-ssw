@@ -13,6 +13,7 @@ from django.views.decorators.csrf import csrf_exempt
 from django.core.files.base import ContentFile
 from .models import Media, Asset
 from .tasks import export_data_from_ls, ingest_media_files
+from .services.label_studio import LabelStudioService
 from pathlib import Path
 from django.shortcuts import render
 from django.contrib import admin
@@ -23,98 +24,26 @@ from django.contrib import admin
 
 @login_required
 def create_label_studio_project(request, media_id):
-    try:
-        media = Media.objects.get(pk=media_id)
-    except Media.DoesNotExist:
-        raise Http404("Media not found")
+    media = get_object_or_404(Media, pk=media_id)
 
-    # --- 准备 URL 地址 ---
-    # 内部服务间通信，使用服务名，效率更高更稳定
-    internal_ls_url = settings.LABEL_STUDIO_URL
-    # 生成给浏览器重定向用的外部公开地址
-    public_ls_url = settings.LABEL_STUDIO_PUBLIC_URL
-
-    # 如果项目已创建，则直接跳转到公开地址
-    if media.label_studio_project_id:
-        redirect_url = f"{public_ls_url}/projects/{media.label_studio_project_id}"
+    # 如果项目已存在，直接跳转
+    redirect_url = media.get_label_studio_project_url()
+    if redirect_url:
         messages.info(request, "该媒资已在 Label Studio 中创建项目，将直接跳转。")
         return HttpResponseRedirect(redirect_url)
 
-    # --- 1. 准备 API 调用所需的基础信息 ---
-    api_token = settings.LABEL_STUDIO_ACCESS_TOKEN
-    headers = {
-        "Authorization": f"Token {api_token}",
-        "Content-Type": "application/json",
-    }
+    # 实例化并调用服务
+    service = LabelStudioService()
+    success, message, redirect_url = service.create_project_and_import_tasks(media=media, request=request)
 
-    # --- 2. 加载自定义标注模板 ---
-    try:
-        # 确保模板文件名正确
-        label_config_xml = render_to_string('ls_templates/video.xml')
-    except TemplateDoesNotExist:
-        messages.error(request, "错误：未找到 Label Studio 的标注模板文件。")
-        return redirect('admin:media_assets_media_change', object_id=media.id)
-
-    # --- 3. 动态生成回调 URL 和 expert_instruction ---
-    return_to_django_url = request.build_absolute_uri(
-        reverse('admin:media_assets_media_change', args=[media.id])
-    )
-    expert_instruction_html = f"""
-    <h4>操作指南</h4>
-    <p>请为《{media.title}》下的所有剧集（Tasks）完成标注。</p>
-    <hr style="margin: 20px 0;">
-    <a href="{return_to_django_url}" target="_blank" style="...">↩️ 返回 Django 媒资主页</a>
-    """
-
-    # --- 4. 调用 API 创建 Project ---
-    project_payload = {
-        "title": f"{media.title} - 标注项目",
-        "expert_instruction": expert_instruction_html,
-        "label_config": label_config_xml,
-    }
-
-    try:
-        # 使用内部地址进行 API 调用
-        project_response = requests.post(f"{internal_ls_url}/api/projects", json=project_payload, headers=headers)
-        project_response.raise_for_status()
-        project_data = project_response.json()
-        project_id = project_data.get("id")
-
-        if not project_id:
-            messages.error(request, "API 调用成功，但未返回项目ID。")
-            return redirect('admin:media_assets_media_changelist')
-
-        media.label_studio_project_id = project_id
-        media.save()
-
-        # --- 5. 循环导入 Tasks ---
-        assets_to_label = media.assets.all()
-        for asset in assets_to_label:
-            if not asset.processed_video_url:
-                messages.warning(request, f"剧集 '{asset.title}' 没有处理后的视频URL，跳过导入。")
-                continue
-
-            task_payload = {"data": {"video_url": asset.processed_video_url}}
-
-            # 同样，使用内部地址进行 API 调用
-            task_response = requests.post(f"{internal_ls_url}/api/projects/{project_id}/tasks", json=task_payload,
-                                          headers=headers)
-
-            if task_response.status_code == 201:
-                task_id = task_response.json().get('id')
-                asset.label_studio_task_id = task_id
-                asset.l2_l3_status = 'in_progress'
-                asset.save()
-            else:
-                messages.error(request, f"为剧集 '{asset.title}' 创建 Task 失败: {task_response.text}")
-
-        messages.success(request, f"成功在 Label Studio 中创建项目 (ID: {project_id}) 并导入任务！")
-        # 最终重定向到给浏览器访问的公开地址
-        return HttpResponseRedirect(f"{public_ls_url}/projects/{project_id}")
-
-    except requests.exceptions.RequestException as e:
-        messages.error(request, f"调用 Label Studio API 失败: {e}")
+    # 根据服务返回的结果处理响应
+    if success:
+        messages.success(request, message)
+        return HttpResponseRedirect(redirect_url)
+    else:
+        messages.error(request, message)
         return redirect('admin:media_assets_media_changelist')
+
 
 @login_required
 def mark_asset_as_complete(request, asset_id):

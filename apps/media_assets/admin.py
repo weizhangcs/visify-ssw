@@ -73,8 +73,8 @@ class MediaAdmin(admin.ModelAdmin):
 
         # 2. LS 项目创建按钮 (只有在加载完成后才显示)
         if obj.ingestion_status == 'completed':
-            if obj.label_studio_project_id:
-                ls_url = f"{settings.LABEL_STUDIO_URL}/projects/{obj.label_studio_project_id}"
+            ls_url = obj.get_label_studio_project_url()
+            if ls_url:
                 actions_html.append(
                     f'<a class="button" href="{ls_url}" target="_blank">打开 LS 项目</a>'
                 )
@@ -175,17 +175,8 @@ class AssetAdmin(admin.ModelAdmin):
 
     def subeditor_actions(self, obj):
         """用于列表页的按钮生成方法"""
-        # 检查必需的文件是否存在
-        if obj.processed_video_url and obj.source_subtitle_url:
-            # 从 .env 文件读取 SubEditor 的基础 URL
-            subeditor_base_url = settings.SUBEDITOR_PUBLIC_URL
-            video_url = obj.processed_video_url
-            srt_url = obj.source_subtitle_url
-            asset_id = str(obj.id)  # 获取 Asset 的 ID
-
-            # 构建包含查询参数的最终 URL
-            target_url = f"{subeditor_base_url}?videoUrl={video_url}&srtUrl={srt_url}&assetId={asset_id}"
-
+        target_url = obj.get_subeditor_url()
+        if target_url:
             button_text = "▶️ 打开字幕编辑器"
             button_color = "#FF9800"  # 橙色
             if obj.l1_status == 'completed':
@@ -210,14 +201,8 @@ class AssetAdmin(admin.ModelAdmin):
 
     def annotator_actions(self, obj):
         """在列表页显示 L2/L3 标注的操作按钮"""
-        # 检查必需的 ID 是否存在
-        if obj.media.label_studio_project_id and obj.label_studio_task_id:
-            project_id = obj.media.label_studio_project_id
-            task_id = obj.label_studio_task_id
-
-            # 使用你通过实际测试验证的、正确的 URL 格式
-            ls_task_url = f"{settings.LABEL_STUDIO_URL}/projects/{project_id}/data?tab={task_id}&task={task_id}"
-
+        ls_task_url = obj.get_label_studio_task_url()
+        if ls_task_url:
             button_text = "▶️ 打开标注任务"
             button_color = "#2196F3"  # 蓝色
             if obj.l2_l3_status == 'completed':
