@@ -1,0 +1,59 @@
+{% extends "admin/base_site.html" %}
+{% block content %}
+<div>
+    <h1>批量上传文件: {{ media.title }}</h1>
+    <p>请将本媒资下的所有视频 (.mp4) 和字幕 (.srt) 文件拖拽到下方区域，或点击该区域选择文件。</p>
+    <p><strong>重要提示：</strong>视频和字幕的文件名主干必须保持一致，例如 `ep01.mp4` 和 `ep01.srt`。</p>
+    
+    <form action="{% url 'admin:media_assets_media_batch_upload_api' media.id %}" class="dropzone" id="media-uploader">
+        {# 1. 加入 CSRF Token 标签 #}
+        {% csrf_token %}
+        <div class="fallback">
+            <input name="file" type="file" multiple />
+        </div>
+    </form>
+
+    <br>
+    <button id="start-processing-btn" style="display: none; padding: 10px 15px; background-color: #4CAF50; color: white; border: none; border-radius: 5px; cursor: pointer;">开始处理上传的文件</button>
+    <a href="{% url 'admin:media_assets_media_change' media.id %}">&laquo; 返回到媒资编辑页面</a>
+</div>
+
+<link rel="stylesheet" href="https://unpkg.com/dropzone@5/dist/min/dropzone.min.css" type="text/css" />
+<script src="https://unpkg.com/dropzone@5/dist/min/dropzone.min.js"></script>
+<script>
+    // 2. 从页面中获取 CSRF Token
+    const csrftoken = document.querySelector('[name=csrfmiddlewaretoken]').value;
+
+    // 3. 配置 Dropzone
+    Dropzone.options.mediaUploader = {
+        paramName: "file",
+        maxFilesize: 5000, // MB
+        acceptedFiles: ".mp4,.mov,.srt",
+        addRemoveLinks: true,
+        dictDefaultMessage: "拖拽文件到这里或点击上传",
+
+        // 4. 将 CSRF Token 添加到所有请求的头部
+        headers: {
+            'X-CSRFToken': csrftoken
+        },
+
+        init: function() {
+            const startBtn = document.querySelector("#start-processing-btn");
+            this.on("queuecomplete", function(file) {
+                // 所有文件上传完成后，显示“开始处理”按钮
+                startBtn.style.display = 'inline-block';
+            });
+            // (可选) 如果有新文件加入队列，隐藏按钮，防止用户过早点击
+            this.on("addedfile", function(file) {
+                startBtn.style.display = 'none';
+            });
+        }
+    };
+
+    // (可选) 为“开始处理”按钮添加点击事件
+    document.querySelector("#start-processing-btn").addEventListener('click', function() {
+        // Django 的模板语言会在这里生成正确的 URL
+        window.location.href = "{% url 'admin:media_assets_media_trigger_ingest' media.id %}";
+    });
+</script>
+{% endblock %}

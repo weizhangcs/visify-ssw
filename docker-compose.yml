@@ -1,0 +1,107 @@
+services:
+  db:
+    image: postgres:16
+    container_name: vss-db
+    volumes:
+      - postgres_data:/var/lib/postgresql/data/
+    environment:
+      - POSTGRES_DB=${POSTGRES_DB}
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+    expose:
+      - "5432"
+
+  redis:
+    image: redis:7-alpine
+    container_name: vss-redis
+    expose:
+      - "6379"
+
+  web:
+    build: .
+    container_name: vss-web
+    command: python manage.py runserver 0.0.0.0:8000
+    volumes:
+      - .:/app
+    ports:
+      - "8000:8000"
+    environment: &django_env
+      # Django & Postgres & Celery
+      - DJANGO_SETTINGS_MODULE=visify_ssw.settings
+      - DJANGO_SECRET_KEY=${DJANGO_SECRET_KEY}
+      - DJANGO_DEBUG=${DJANGO_DEBUG}
+      - POSTGRES_DB=${POSTGRES_DB}
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      # --- vvvvvv 核心修改：内外地址分离 vvvvvv ---
+      # 内部服务间通信地址 (使用服务名)
+      - LABEL_STUDIO_URL=http://label-studio:8080
+      - SUBEDITOR_URL=http://subeditor:3000
+
+      # 外部浏览器访问地址 (使用 localhost 和映射的端口)
+      - LABEL_STUDIO_PUBLIC_URL=${LABEL_STUDIO_PUBLIC_URL}
+      - SUBEDITOR_PUBLIC_URL=${SUBEDITOR_PUBLIC_URL}
+      - LOCAL_MEDIA_URL_BASE=${LOCAL_MEDIA_URL_BASE}
+      # --- ^^^^^^ 核心修改：内外地址分离 ^^^^^^ ---
+      # 存储后端开关与配置
+      - STORAGE_BACKEND=${STORAGE_BACKEND}
+      - LOCAL_MEDIA_URL_BASE=${LOCAL_MEDIA_URL_BASE}
+      # AWS S3 (即使在local模式下也传递)
+      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
+      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
+      - AWS_STORAGE_BUCKET_NAME=${AWS_STORAGE_BUCKET_NAME}
+      - AWS_S3_REGION_NAME=${AWS_S3_REGION_NAME}
+      - AWS_S3_CUSTOM_DOMAIN=${AWS_S3_CUSTOM_DOMAIN}
+    depends_on:
+      - db
+      - redis
+
+  celery_worker:
+    build: .
+    container_name: vss-celery-worker
+    command: celery -A visify_ssw worker -l info
+    volumes:
+      - .:/app
+      - processed_media_volume:/app/media_root/processed_files
+    environment: *django_env
+    depends_on:
+      - web
+
+  nginx_media_server:
+    image: nginx:1.25-alpine
+    container_name: vss-nginx-media
+    ports:
+      - "9999:80"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - processed_media_volume:/var/www/processed_media:ro
+
+  subeditor:
+    build:
+      # build 的上下文指向你的 aimu.app 项目的路径
+      # 请确保这里的相对路径是正确的
+      context: D:\DevProjects\WebstormProjects\vss-sub-editor
+    container_name: vss-subeditor
+    ports:
+      - "3000:3000"
+    # 注意：因为我们使用了生产构建，热重载不再有效
+    # 如果需要修改前端代码，需要重新构建此服务
+
+  label-studio:
+    image: heartexlabs/label-studio:latest
+    container_name: vss-label-studio
+    ports:
+      - "8081:8080"
+    volumes:
+      - label_studio_data:/label-studio/data
+      - ./nginx/nginx-ls.conf:/etc/nginx/nginx.conf:ro # 使用专用的Nginx配置文件
+    environment:
+      - LABEL_STUDIO_ALLOW_LEGACY_TOKEN_AUTH=true
+      - LABEL_STUDIO_HOST=http://localhost:8081 # 此处仍用localhost，因为LS内部逻辑需要
+      - NGINX_PROXY_PASS_AUTHORIZATION=true
+
+volumes:
+  postgres_data:
+  processed_media_volume:
+  label_studio_data:

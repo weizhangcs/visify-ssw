@@ -1,0 +1,40 @@
+# Git 仓库本身
+.git/
+.gitignore
+
+# Docker 相关文件
+.dockerignore
+docker-compose.yml
+Dockerfile
+
+# IDE 和编辑器配置
+.idea/
+.vscode/
+
+# 虚拟环境
+venv/
+.venv/
+
+# 秘钥和配置文件 (!!!)
+# 秘钥应在容器运行时通过环境变量或env_file注入，而不是构建在镜像里。
+.env
+
+# 字节码
+__pycache__/
+*.pyc
+
+# 本地开发数据库
+db.sqlite3
+
+# 操作系统和临时文件
+.DS_Store
+Thumbs.db
+*.log
+
+# 媒体和上传文件 (这些文件应由Nginx或外部存储提供，而不是打包在应用镜像内)
+batch_uploads/
+l1_outputs/
+l2_l3_outputs/
+source_files/
+temp_modeler_inputs/
+temp_processed/

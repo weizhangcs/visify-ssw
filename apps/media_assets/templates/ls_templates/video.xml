@@ -1,0 +1,143 @@
+<View>
+	<Video name="video_player" value="$video_url" sync="audio_timeline"/>
+	<Audio name="audio_timeline" value="$video_url" sync="video_player"/>
+	<Labels name="region_type" toName="audio_timeline">
+		<Label value="场景/Scene" background="#007bff"/>
+		<Label value="高光/Highlight" background="#28a745"/>
+		<Label value="叙事线索/NARRATIVE_CUE" background="#ffc107"/>
+	</Labels>
+	<View visibleWhen="region-selected" whenLabelValue="场景/Scene">
+		<Header value="场景标注 (SCENE Annotation)"/>
+		<Header value="场景ID (Scene ID) 本文件内的场景序号, 从1开始"/>
+		<Number name="scene_id" toName="audio_timeline" perRegion="true" min="1"/>
+		<Header value="地点 (Location)"/>
+		<TextArea name="scene_location" toName="audio_timeline" perRegion="true" maxSubmissions="1" placeholder="例如：在一座大厦前"/>
+		<Header value="情节描述 (Character Dynamics)"/>
+		<TextArea name="scene_character_dynamics" toName="audio_timeline" perRegion="true" rows="3" maxSubmissions="1" showSubmitButton="false" placeholder="对此场景中人物关系、行为、目标的核心描述"/>
+		<Header value="场景内容类型 (Scene Content Type)"/>
+		<Choices name="scene_content_type" toName="audio_timeline" perRegion="true" choice="single-radio" showInline="true">
+			<Choice value="对话驱动/Dialogue_Heavy"/>
+			<Choice value="动作驱动/Action_Driven"/>
+			<Choice value="内心独白/Internal_Monologue"/>
+			<Choice value="视觉叙事/Visual_Storytelling"/>
+		</Choices>
+		<Header value="情绪或氛围 (Mood or Atmosphere)"/>
+		<Choices name="scene_mood_and_atmosphere" toName="audio_timeline" perRegion="true" choice="single-radio" showInline="true">
+			<Choice value="浪漫/Romantic"/>
+			<Choice value="温馨/Warm"/>
+			<Choice value="喜悦/Joyful"/>
+			<Choice value="平静/Calm"/>
+			<Choice value="紧张/Tense"/>
+			<Choice value="悬疑/Suspenseful"/>
+			<Choice value="悲伤/Sad"/>
+			<Choice value="愤怒/Angry"/>
+			<Choice value="冲突/Confrontational"/>
+			<Choice value="恐惧/Fearful"/>
+			<Choice value="压抑/Oppressive"/>
+			<Choice value="诡异/Eerie"/>
+		</Choices>
+		<Header value="叙事分支标记 (Narrative Branch)"/>
+		<Choices name="narrative_branch_type" toName="audio_timeline" perRegion="true" choice="single-radio" showInline="true">
+			<Choice value="无/NONE"/>
+			<Choice value="主干或并行分支/BRANCH"/>
+			<Choice value="分支交叉点/INTERSECTION"/>
+		</Choices>
+		<View visibleWhen="choice-selected" whenTagName="narrative_branch_type" whenChoiceValue="主干或并行分支/BRANCH" style="display: flex; align-items: center; gap: 15px;">
+			<Text name="branch_label" value="分支ID:"/>
+			<Number name="branch_id" toName="audio_timeline" perRegion="true" min="0" defaultValue="0" placeholder="例如: 0, 1, 2..."/>
+		</View>
+		<View visibleWhen="choice-selected" whenTagName="narrative_branch_type" whenChoiceValue="分支交叉点/INTERSECTION" style="display: flex; align-items: center; gap: 15px;">
+			<Text name="intersection_label" value="交叉分支ID (X, Y):"/>
+			<Number name="branch_intersection_x" toName="audio_timeline" perRegion="true" min="0" defaultValue="0"/>
+			<Number name="branch_intersection_y" toName="audio_timeline" perRegion="true" min="1" defaultValue="1"/>
+		</View>
+		<Header value="时间线索标记 (Timeline Marker)"/>
+		<Choices name="scene_timeline_marker_type" toName="audio_timeline" perRegion="true" choice="single-radio" showInline="true">
+			<Choice value="开始/START"/>
+			<Choice value="无/NONE"/>
+			<Choice value="返回现在/RETURN_PRESENT"/>
+			<Choice value="插入过去/INSERT_PAST"/>
+			<Choice value="预叙/FORWARD"/>
+			<Choice value="引用过去/REFERENCE"/>
+			<Choice value="过去/PAST"/>
+			<Choice value="未来/FUTURE"/>
+			<Choice value="无关画面/UNRELATED"/>
+		</Choices>
+		<View visibleWhen="choice-selected" whenTagName="scene_timeline_marker_type" whenChoiceValue="插入过去/INSERT_PAST" style="display: flex; align-items: center; gap: 15px;">
+			<Text name="insert_past_label" value="插入于 章节/场景 之后，顺序:"/>
+			<Number name="insert_past_chapter" toName="audio_timeline" perRegion="true" min="1" defaultValue="1"/>
+			<Number name="insert_past_scene" toName="audio_timeline" perRegion="true" min="1" defaultValue="1"/>
+			<Number name="insert_past_inner_index" toName="audio_timeline" perRegion="true" min="1" defaultValue="1"/>
+		</View>
+		<View visibleWhen="choice-selected" whenTagName="scene_timeline_marker_type" whenChoiceValue="预叙/FORWARD" style="display: flex; align-items: center; gap: 15px;">
+			<Text name="forward_label" value="重定位于未来 章节/场景 之后，顺序:"/>
+			<Number name="forward_chapter" toName="audio_timeline" perRegion="true" min="1" defaultValue="1"/>
+			<Number name="forward_scene" toName="audio_timeline" perRegion="true" min="1" defaultValue="1"/>
+			<Number name="forward_inner_index" toName="audio_timeline" perRegion="true" min="1" defaultValue="1"/>
+		</View>
+		<View visibleWhen="choice-selected" whenTagName="scene_timeline_marker_type" whenChoiceValue="引用过去/REFERENCE" style="display: flex; align-items: center; gap: 15px;">
+			<Text name="reference_label" value="引用坐标集 (格式: 章节_场景;...):"/>
+			<TextArea name="reference_scenes" toName="audio_timeline" perRegion="true" placeholder="例如: 1_2 或 1_2;3_5"/>
+		</View>
+		<View visibleWhen="choice-selected" whenTagName="scene_timeline_marker_type" whenChoiceValue="过去/PAST" style="display: flex; align-items: center; gap: 15px;">
+			<Text name="past_label_1" value="顺序:"/>
+			<Number name="past_inner_index" toName="audio_timeline" perRegion="true" min="1" defaultValue="1"/>
+			<Text name="past_label_2" value="可选描述:"/>
+			<TextArea name="past_description" toName="audio_timeline" perRegion="true" placeholder="例如: Ten Years Ago"/>
+		</View>
+		<View visibleWhen="choice-selected" whenTagName="scene_timeline_marker_type" whenChoiceValue="未来/FUTURE" style="display: flex; align-items: center; gap: 15px;">
+			<Text name="future_label_1" value="顺序:"/>
+			<Number name="future_inner_index" toName="audio_timeline" perRegion="true" min="1" defaultValue="1"/>
+			<Text name="future_label_2" value="可选描述:"/>
+			<TextArea name="future_description" toName="audio_timeline" perRegion="true" placeholder="例如: Six Months Later"/>
+		</View>
+		<View visibleWhen="choice-selected" whenTagName="scene_timeline_marker_type" whenChoiceValue="无关画面/UNRELATED" style="display: flex; align-items: center; gap: 15px;">
+			<Text name="unrelated_label" value="可选描述:"/>
+			<TextArea name="unrelated_description" toName="audio_timeline" perRegion="true" placeholder="例如: In a dream"/>
+		</View>
+	</View>
+	<View visibleWhen="region-selected" whenLabelValue="高光/Highlight">
+		<Header value="高光标注 (HIGHLIGHT Annotation)"/>
+		<Header value="高光ID (Highlight ID)，本文件内的场景序号, 从1开始"/>
+		<Number name="highlight_id" toName="audio_timeline" perRegion="true" min="1" placeholder="项目内全局唯一, 从1开始"/>
+		<Header value="类型 (Type)"/>
+		<Choices name="highlight_type" toName="audio_timeline" perRegion="true" choice="single-radio" showInline="true">
+			<Choice value="动作片段/Action Clip"/>
+			<Choice value="情感片段/Emotional Clip"/>
+			<Choice value="对话片段/Dialogue Clip"/>
+			<Choice value="悬念片段/Suspense Clip"/>
+			<Choice value="信息片段/Revelation Clip"/>
+			<Choice value="幽默片段/Humorous Clip"/>
+		</Choices>
+		<Header value="情节描述 (Description)"/>
+		<TextArea name="highlight_description" toName="audio_timeline" perRegion="true" rows="3" maxSubmissions="1" showSubmitButton="false" placeholder="对此场景中人物关系、行为、目标的核心描述"/>
+		<Header value="情绪 (Mood)"/>
+		<Choices name="highlight_mood" toName="audio_timeline" perRegion="true" choice="single-radio" showInline="true">
+			<Choice value="燃/Exciting"/>
+			<Choice value="爽/Satisfying"/>
+			<Choice value="虐/Heart-wrenching"/>
+			<Choice value="甜/Sweet"/>
+			<Choice value="爆笑/Hilarious"/>
+			<Choice value="恐怖/Terrifying"/>
+			<Choice value="治愈/Healing"/>
+			<Choice value="感动/Touching"/>
+			<Choice value="紧张/Tense"/>
+		</Choices>
+	</View>
+	<View visibleWhen="region-selected" whenLabelValue="叙事线索/NARRATIVE_CUE">
+		<Header value="叙事线索标注 (Narrative Cue Annotation)"/>
+		<Header value="1. 线索类型 (Cue Type)"/>
+		<Choices name="narrative_cue_type" toName="audio_timeline" perRegion="true" choice="single-radio" showInline="true">
+			<Choice value="关键信息/Key_Information"/>
+			<Choice value="物品/Object"/>
+		</Choices>
+		<View visibleWhen="choice-selected" whenTagName="narrative_cue_type" whenChoiceValue="关键信息/Key_Information">
+			<Header value="2. 关键信息描述"/>
+			<TextArea name="key_information_summary" toName="audio_timeline" perRegion="true" rows="1" showSubmitButton="true" placeholder="请描述通过纯视觉方式呈现的、对剧情理解至关重要的事实性信息。"/>
+		</View>
+		<View visibleWhen="choice-selected" whenTagName="narrative_cue_type" whenChoiceValue="物品/Object">
+			<Header value="2. 物品名称"/>
+			<TextArea name="object_name" toName="audio_timeline" perRegion="true" rows="1" showSubmitButton="true" placeholder="请填写物品的标准化名称，例如：订婚戒指"/>
+		</View>
+	</View>
+</View>

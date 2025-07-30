@@ -1,0 +1,14 @@
+# requirements.txt
+
+django>=4.2,<5.0
+psycopg2-binary  # PostgreSQL 适配器
+boto3            # AWS SDK
+django-storages  # Django S3 集成
+djangorestframework # API 框架
+django-allauth   # SSO 和认证
+gunicorn         # 生产级 WSGI 服务器，在容器中使用它是个好习惯
+python-decouple  # 用于从 .env 文件读取配置
+requests
+celery>=5.0,<6.0
+redis>=4.0,<5.0
+django-cors-headers>=3.14.0,<4.0.0

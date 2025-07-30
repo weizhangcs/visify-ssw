@@ -1,0 +1,61 @@
+# 字节码或优化文件
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# C 扩展
+*.so
+
+# IDE 和编辑器配置
+.idea/
+.vscode/
+
+# 虚拟环境
+venv/
+.venv/
+env/
+.env/
+virtualenv/
+
+# 秘钥和配置文件 (!!!)
+# 永远不要将包含密码、密钥等敏感信息的文件提交到版本控制！
+.env
+
+# 本地开发数据库
+db.sqlite3
+
+# 操作系统生成的文件
+.DS_Store
+Thumbs.db
+
+# 日志文件
+*.log
+
+# 测试和覆盖率报告
+.pytest_cache/
+.coverage
+htmlcov/
+
+# --- Visify Story Studio Workbench 特定规则 ---
+
+# [cite_start]批量上传的临时文件 [cite: 474-486]
+batch_uploads/
+
+# [cite_start]第一层标注的产出物 [cite: 487-489]
+l1_outputs/
+
+# [cite_start]第二、三层标注的产出物 [cite: 490]
+l2_l3_outputs/
+
+# [cite_start]Django FileField 的默认上传目录 [cite: 492-511]
+source_files/
+
+# [cite_start]Script Modeler 的临时输入目录 [cite: 512]
+temp_modeler_inputs/
+
+# [cite_start]视频转码等处理后的临时文件 [cite: 512]
+temp_processed/
+
+# [cite_start]您用于生成文件清单的临时文件 [cite: 521]
+files.txt
