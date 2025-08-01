@@ -2,7 +2,7 @@ import requests
 import json
 from django.conf import settings
 from django.contrib import messages
-from django.http import HttpResponseRedirect, Http404
+from django.http import HttpResponseRedirect, Http404, HttpResponse
 from django.shortcuts import get_object_or_404, redirect
 from django.template import TemplateDoesNotExist
 from django.urls import reverse
@@ -154,3 +154,8 @@ def trigger_ingest_task(request, media_id):
 
     # 将用户重定向回 Media 的编辑页面
     return redirect('admin:media_assets_media_change', object_id=media.id)
+
+@login_required
+def status_view(request):
+    """一个简单的视图，用于显示当前登录用户的信息。"""
+    return HttpResponse(f"<h1>Status</h1><p>You are logged in as: {request.user.username}</p>")

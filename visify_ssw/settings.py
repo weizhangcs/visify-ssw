@@ -45,7 +45,14 @@ INSTALLED_APPS = [
     # 我们自己的 App
     'apps.media_assets.apps.MediaAssetsConfig',
 
+    # OIDC Client
+    'mozilla_django_oidc',
 ]
+
+AUTHENTICATION_BACKENDS = (
+    'django.contrib.auth.backends.ModelBackend',
+    'mozilla_django_oidc.auth.OIDCAuthenticationBackend',
+)
 
 MIDDLEWARE = [
     'corsheaders.middleware.CorsMiddleware',
@@ -203,3 +210,34 @@ STORAGE_BACKEND = config('STORAGE_BACKEND', default='local')
 # FFmpeg Configuration
 FFMPEG_VIDEO_BITRATE = config('FFMPEG_VIDEO_BITRATE', default='2M')
 FFMPEG_VIDEO_PRESET = config('FFMPEG_VIDEO_PRESET', default='fast')
+
+# --- OIDC Client for Authentik ---
+OIDC_RP_CLIENT_ID = config('OIDC_RP_CLIENT_ID')
+OIDC_RP_CLIENT_SECRET = config('OIDC_RP_CLIENT_SECRET')
+
+# 【重要】请将下面 JWKS URL 中的 'vss-oidc-provider' 替换为您的真实 Provider Slug
+# 用户浏览器重定向地址 (必须使用外部可访问的地址)
+OIDC_OP_AUTHORIZATION_ENDPOINT = "http://localhost:9000/application/o/authorize/"
+# 服务器间后台通信地址 (可以使用内部服务名)
+OIDC_OP_TOKEN_ENDPOINT = "http://authentik-server:9000/application/o/token/"
+OIDC_OP_USER_ENDPOINT = "http://authentik-server:9000/application/o/userinfo/"
+OIDC_OP_JWKS_ENDPOINT = "http://authentik-server:9000/application/o/vss-workbench-django/jwks/"
+
+
+# 定义登录流程
+LOGIN_URL = '/oidc/authenticate/'
+LOGIN_REDIRECT_URL = '/admin/' # 登录成功后跳转到 Admin 后台
+#LOGIN_REDIRECT_URL = '/' # 登录成功后跳转到 Admin 后台
+LOGOUT_REDIRECT_URL = '/'      # 登出后跳转到 Authentik 主页
+
+# 指定 Authentik 使用的签名算法
+OIDC_RP_SIGN_ALGO = 'RS256'
+
+# 配置用户自动创建和字段映射
+#OIDC_CREATE_USER = True
+#OIDC_USERNAME_ALGO = 'mozilla_django_oidc.utils.get_email' # 使用 OIDC 提供的 email 作为 Django 用户名
+#OIDC_USERNAME_ALGO = 'apps.media_assets.utils.get_username_from_claims' # 使用我们自定义的算法
+#OIDC_USERNAME_CLAIM = 'email' # 直接使用 'email' claim 作为 Django 用户名
+OIDC_CREATE_USER = 'apps.media_assets.auth.create_vss_user'
+OIDC_OP_FETCH_USER_INFO = True # 确保获取用户信息
+OIDC_RP_SCOPES = "openid email profile" # 向 Authentik 请求这些信息

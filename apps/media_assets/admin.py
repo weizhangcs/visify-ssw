@@ -76,12 +76,14 @@ class MediaAdmin(admin.ModelAdmin):
             ls_url = obj.get_label_studio_project_url()
             if ls_url:
                 actions_html.append(
-                    f'<a class="button" href="{ls_url}" target="_blank">打开 LS 项目</a>'
+                    #f'<a class="button" href="{ls_url}" target="_blank">打开 LS 项目</a>'
+                    f'<a class="button" href="{ls_url}">打开 LS 项目</a>'
                 )
             else:
                 url = reverse('admin:media_assets_media_create_ls_project', args=[obj.pk])
                 actions_html.append(
-                    f'<a class="button" href="{url}" target="_blank" style="background-color: #4CAF50;">创建并导入到 LS</a>'
+                    #f'<a class="button" href="{url}" target="_blank" style="background-color: #4CAF50;">创建并导入到 LS</a>'
+                    f'<a class="button" href="{url}" style="background-color: #4CAF50;">创建并导入到 LS</a>'
                 )
 
         return format_html(' '.join(actions_html))
@@ -210,7 +212,8 @@ class AssetAdmin(admin.ModelAdmin):
                 button_color = "#4CAF50"  # 绿色
 
             return format_html(
-                '<a class="button" href="{}" target="_blank" style="background-color: {};">{}</a>',
+                #'<a class="button" href="{}" target="_blank" style="background-color: {};">{}</a>',
+                '<a class="button" href="{}" style="background-color: {};">{}</a>',
                 ls_task_url,
                 button_color,
                 button_text

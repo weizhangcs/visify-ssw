@@ -16,9 +16,15 @@ Including another URLconf
 """
 from django.contrib import admin
 from django.urls import path, include
+from django.views.generic.base import RedirectView
+from apps.media_assets import views as media_views
 
 urlpatterns = [
+    # 强制将 Admin 的默认登录页重定向到 OIDC 认证流程
+    # 'oidc_authentication_init' 是 mozilla-django-oidc 库中 /oidc/authenticate/ URL 的名称
+    path('admin/login/', RedirectView.as_view(pattern_name='oidc_authentication_init')),
     path('admin/', admin.site.urls),
-# 将所有 /integrations/ls/ 开头的请求路由到 media_assets.urls
+    path('status/', media_views.status_view, name='status_view'),
     path('integrations/ls/', include('apps.media_assets.urls', namespace='media_assets')),
+    path('oidc/', include('mozilla_django_oidc.urls')),
 ]
