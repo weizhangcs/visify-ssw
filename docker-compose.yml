@@ -33,7 +33,8 @@ services:
       - "6379"
 
   web:
-    build: .
+    #build: .
+    image: ghcr.io/weizhangcs/vss-workbench:v1.0.0
     container_name: vss-web
     command: python manage.py runserver 0.0.0.0:8000
     volumes:
@@ -73,7 +74,8 @@ services:
       - redis
 
   celery_worker:
-    build: .
+    #build: .
+    image: ghcr.io/weizhangcs/vss-workbench:v1.0.0
     container_name: vss-celery-worker
     command: celery -A visify_ssw worker -l info
     volumes:
@@ -92,10 +94,7 @@ services:
       - ./media_root:/var/www/media_root:ro
 
   subeditor:
-    build:
-      # build 的上下文指向你的 aimu.app 项目的路径
-      # 请确保这里的相对路径是正确的
-      context: D:\DevProjects\WebstormProjects\vss-sub-editor
+    image: ghcr.io/weizhangcs/vss-subeditor:v1.0.0
     container_name: vss-subeditor
     ports:
       - "3000:3000"

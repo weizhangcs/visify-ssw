@@ -1,0 +1,19 @@
+# 这个文件仅供研发人员在本地构建镜像时使用
+# 它会被 .gitignore 排除，不会进入源码仓库
+services:
+  web:
+    build: .
+    # 我们可以在这里覆盖 volumes，以支持本地开发时的热重载
+    volumes:
+      - .:/app
+
+  celery_worker:
+    build: .
+    volumes:
+      - .:/app
+
+  # 如果您本地也需要构建 subeditor
+  subeditor:
+     image: ghcr.io/weizhangcs/vss-subeditor:v1.0.0
+     build:
+       context: D:\DevProjects\WebstormProjects\vss-sub-editor # 请确保路径正确
