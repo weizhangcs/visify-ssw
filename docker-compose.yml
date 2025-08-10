@@ -1,10 +1,19 @@
+# Visify Story Studio - 部署配置文件
+# ----------------------------------------------------
+# 本文件定义了应用所需的所有服务、网络和数据卷。
+# 设计用于生产环境或类生产环境的稳定部署。
+# ----------------------------------------------------
+
 services:
+  # 核心数据库服务
   db:
     image: postgres:16
     container_name: vss-db
     volumes:
+      # 将 PostgreSQL 数据持久化到命名卷中，以防容器被删除时数据丢失
       - postgres_data:/var/lib/postgresql/data/
-      - ./configs/postgres/init-dbs.sql:/docker-entrypoint-initdb.d/init-dbs.sql
+      # 在数据库首次启动时，执行脚本以创建额外的数据库（例如 for Authentik）
+      - ./configs/postgres/init-dbs.sh:/docker-entrypoint-initdb.d/init-dbs.sh
     restart: unless-stopped
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -d $${POSTGRES_DB} -U $${POSTGRES_USER}"]
@@ -17,8 +26,10 @@ services:
       - POSTGRES_USER=${POSTGRES_USER}
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
     ports:
+      # 将主机的 5432 端口映射到容器，仅用于可能的外部调试，可按需移除
       - "5432:5432"
 
+  # 消息代理与缓存服务
   redis:
     image: redis:7-alpine
     container_name: vss-redis
@@ -30,103 +41,79 @@ services:
       retries: 5
       timeout: 3s
     expose:
+      # 仅在容器网络内部暴露端口，不映射到主机
       - "6379"
 
+  # Django Web 应用主服务
   web:
-    #build: .
     image: ghcr.io/weizhangcs/vss-workbench:v1.0.0
     container_name: vss-web
     command: python manage.py runserver 0.0.0.0:8000
-    volumes:
-      - .:/app
     ports:
       - "8000:8000"
-    environment: &django_env
-      # Django & Postgres & Celery
-      - DJANGO_SETTINGS_MODULE=visify_ssw.settings
-      - DJANGO_SECRET_KEY=${DJANGO_SECRET_KEY}
-      - DJANGO_DEBUG=${DJANGO_DEBUG}
-      - POSTGRES_DB=${POSTGRES_DB}
-      - POSTGRES_USER=${POSTGRES_USER}
-      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
-      - CELERY_BROKER_URL=redis://redis:6379/0
-      # --- vvvvvv 核心修改：内外地址分离 vvvvvv ---
-      # 内部服务间通信地址 (使用服务名)
-      - LABEL_STUDIO_URL=http://label-studio:8080
-      - SUBEDITOR_URL=http://subeditor:3000
-
-      # 外部浏览器访问地址 (使用 localhost 和映射的端口)
-      - LABEL_STUDIO_PUBLIC_URL=${LABEL_STUDIO_PUBLIC_URL}
-      - SUBEDITOR_PUBLIC_URL=${SUBEDITOR_PUBLIC_URL}
-      - LOCAL_MEDIA_URL_BASE=${LOCAL_MEDIA_URL_BASE}
-      # --- ^^^^^^ 核心修改：内外地址分离 ^^^^^^ ---
-      # 存储后端开关与配置
-      - STORAGE_BACKEND=${STORAGE_BACKEND}
-      - LOCAL_MEDIA_URL_BASE=${LOCAL_MEDIA_URL_BASE}
-      # AWS S3 (即使在local模式下也传递)
-      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
-      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
-      - AWS_STORAGE_BUCKET_NAME=${AWS_STORAGE_BUCKET_NAME}
-      - AWS_S3_REGION_NAME=${AWS_S3_REGION_NAME}
-      - AWS_S3_CUSTOM_DOMAIN=${AWS_S3_CUSTOM_DOMAIN}
+    # 使用 env_file 指令，直接、可靠地加载 .env 文件中的所有变量
+    env_file:
+      - .env
     depends_on:
       - db
       - redis
 
+  # Celery 异步任务处理服务
   celery_worker:
-    #build: .
     image: ghcr.io/weizhangcs/vss-workbench:v1.0.0
     container_name: vss-celery-worker
     command: celery -A visify_ssw worker -l info
-    volumes:
-      - .:/app
-    environment: *django_env
+    # 复用 web 服务的 env_file 配置
+    env_file:
+      - .env
     depends_on:
       - web
 
+  # 本地媒体文件 Nginx 服务
   nginx_media_server:
     image: nginx:1.25-alpine
     container_name: vss-nginx-media
     ports:
       - "9999:80"
     volumes:
+      # 挂载 Nginx 配置文件
       - ./configs/nginx/vss-media-server.conf:/etc/nginx/conf.d/default.conf:ro
+      # 将本地 media_root 目录挂载到 Nginx 的网站根目录，实现文件伺服
       - ./media_root:/var/www/media_root:ro
 
+  # 第一层标注前端应用
   subeditor:
     image: ghcr.io/weizhangcs/vss-subeditor:v1.0.0
     container_name: vss-subeditor
     ports:
       - "3000:3000"
-    # 注意：因为我们使用了生产构建，热重载不再有效
-    # 如果需要修改前端代码，需要重新构建此服务
 
+  # 第二/三层标注工具
   label-studio:
     image: heartexlabs/label-studio:latest
     container_name: vss-label-studio
     ports:
       - "8081:8080"
     volumes:
+      # 将 Label Studio 的内部数据持久化到命名卷
       - label_studio_data:/label-studio/data
-      - ./configs/nginx/nginx-ls.conf:/etc/nginx/nginx.conf:ro # 使用专用的Nginx配置文件
+      # 挂载自定义的 Nginx 代理配置，用于解决与Django集成的认证问题
+      - ./configs/nginx/nginx-ls.conf:/etc/nginx/nginx.conf:ro
     environment:
       - LABEL_STUDIO_ALLOW_LEGACY_TOKEN_AUTH=true
-      - LABEL_STUDIO_HOST=http://localhost:8081 # 此处仍用localhost，因为LS内部逻辑需要
+      - LABEL_STUDIO_HOST=http://localhost:8081
       - NGINX_PROXY_PASS_AUTHORIZATION=true
-      # --- [新增] 使用 Redis 存储 Session 以增强稳定性 ---
+      - LABEL_STUDIO_SIGNUP_WITHOUT_INVITE=true
       - DJANGO_SESSION_ENGINE=django.contrib.sessions.backends.cache
       - LABEL_STUDIO_CACHE_BACKEND=django_redis.cache.RedisCache
-      - REDIS_LOCATION=redis://redis:6379/1 # 使用内部服务名 redis, 并选择 1 号数据库以和 Celery (0号) 区分
-      # --- [新增] 明确设置 Cookie 安全策略以适应 localhost 开发环境 ---
+      - REDIS_LOCATION=redis://redis:6379/1
       - DJANGO_SESSION_COOKIE_SAMESITE=Lax
       - DJANGO_CSRF_COOKIE_SAMESITE=Lax
       - DJANGO_SESSION_COOKIE_SECURE=False
       - DJANGO_CSRF_COOKIE_SECURE=False
-      # --- [新增] 明确指定受信任的来源，解决 Cookie 保存问题 ---
       - CSRF_TRUSTED_ORIGINS=http://localhost:8081
-      # --- [新增] 允许用户自助注册和密码重置 ---
-      - LABEL_STUDIO_SIGNUP_WITHOUT_INVITE=true
 
+  # --- Authentik 身份认证服务 ---
   authentik-server:
     image: ghcr.io/goauthentik/server:2025.6.4
     container_name: vss-authentik-server
@@ -135,7 +122,6 @@ services:
     environment:
       AUTHENTIK_SECRET_KEY: ${AUTHENTIK_SECRET_KEY}
       AUTHENTIK_BOOTSTRAP_PASSWORD: ${AUTHENTIK_BOOTSTRAP_PASSWORD}
-      # 连接到我们现有的 Redis 和 PostgreSQL
       AUTHENTIK_REDIS__HOST: redis
       AUTHENTIK_POSTGRESQL__HOST: db
       AUTHENTIK_POSTGRESQL__USER: ${POSTGRES_USER}
@@ -161,7 +147,6 @@ services:
     environment:
       AUTHENTIK_SECRET_KEY: ${AUTHENTIK_SECRET_KEY}
       AUTHENTIK_BOOTSTRAP_PASSWORD: ${AUTHENTIK_BOOTSTRAP_PASSWORD}
-      # 连接到我们现有的 Redis 和 PostgreSQL
       AUTHENTIK_REDIS__HOST: redis
       AUTHENTIK_POSTGRESQL__HOST: db
       AUTHENTIK_POSTGRESQL__USER: ${POSTGRES_USER}
@@ -170,7 +155,6 @@ services:
     volumes:
       - ./media_root/authentik/media:/media
       - ./configs/authentik/custom-templates:/templates
-      # 以下两个是可选的高级功能，我们可以先保留
       - /var/run/docker.sock:/var/run/docker.sock
       - ./configs/authentik/certs:/certs
     depends_on:
@@ -179,6 +163,7 @@ services:
       redis:
         condition: service_healthy
 
+# --- 数据卷定义 ---
 volumes:
   postgres_data:
   label_studio_data:

@@ -27,4 +27,5 @@ urlpatterns = [
     path('status/', media_views.status_view, name='status_view'),
     path('integrations/ls/', include('apps.media_assets.urls', namespace='media_assets')),
     path('oidc/', include('mozilla_django_oidc.urls')),
+    path('debug/oidc-config/', media_views.debug_oidc_config_view, name='debug_oidc_config'),
 ]

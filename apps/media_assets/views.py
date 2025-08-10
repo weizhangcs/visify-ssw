@@ -17,6 +17,7 @@ from .services.label_studio import LabelStudioService
 from pathlib import Path
 from django.shortcuts import render
 from django.contrib import admin
+from django.contrib.admin.views.decorators import staff_member_required
 
 
 # 视图一：创建 LS 项目并导入任务
@@ -159,3 +160,24 @@ def trigger_ingest_task(request, media_id):
 def status_view(request):
     """一个简单的视图，用于显示当前登录用户的信息。"""
     return HttpResponse(f"<h1>Status</h1><p>You are logged in as: {request.user.username}</p>")
+
+@staff_member_required
+def debug_oidc_config_view(request):
+    """
+    一个临时的、用于单元测试的视图，
+    旨在独立验证从数据库加载OIDC配置的功能。
+    """
+    client_id = settings.OIDC_RP_CLIENT_ID
+    client_secret = settings.OIDC_RP_CLIENT_SECRET
+
+    html = f"""
+    <h1>OIDC Configuration Debug View</h1>
+    <p>This view directly reads from django.conf.settings at the moment of the request.</p>
+    <hr>
+    <p><b>Type of OIDC_RP_CLIENT_ID:</b> {type(client_id)}</p>
+    <p><b>Value of OIDC_RP_CLIENT_ID:</b> <code>{client_id}</code></p>
+    <br>
+    <p><b>Type of OIDC_RP_CLIENT_SECRET:</b> {type(client_secret)}</p>
+    <p><b>Value of OIDC_RP_CLIENT_SECRET:</b> <code>{client_secret[:4]}... (hidden)</code></p>
+    """
+    return HttpResponse(html)

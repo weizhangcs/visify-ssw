@@ -29,8 +29,8 @@ SECRET_KEY = config('DJANGO_SECRET_KEY')
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = config('DJANGO_DEBUG', default=True, cast=bool)
 
-ALLOWED_HOSTS = []
-
+ALLOWED_HOSTS_str = config('DJANGO_ALLOWED_HOSTS', default='localhost,127.0.0.1')
+ALLOWED_HOSTS = [host.strip() for host in ALLOWED_HOSTS_str.split(',') if host.strip()]
 
 # Application definition
 
@@ -44,8 +44,10 @@ INSTALLED_APPS = [
     'django.contrib.staticfiles',
     # 我们自己的 App
     'apps.media_assets.apps.MediaAssetsConfig',
+    'apps.configuration.apps.ConfigurationConfig',
 
-    # OIDC Client
+    # 第三方库
+    'solo',  # 新增
     'mozilla_django_oidc',
 ]
 
@@ -211,9 +213,39 @@ STORAGE_BACKEND = config('STORAGE_BACKEND', default='local')
 FFMPEG_VIDEO_BITRATE = config('FFMPEG_VIDEO_BITRATE', default='2M')
 FFMPEG_VIDEO_PRESET = config('FFMPEG_VIDEO_PRESET', default='fast')
 
-# --- OIDC Client for Authentik ---
-OIDC_RP_CLIENT_ID = config('OIDC_RP_CLIENT_ID')
-OIDC_RP_CLIENT_SECRET = config('OIDC_RP_CLIENT_SECRET')
+from django.utils.functional import SimpleLazyObject
+
+def get_oidc_config_from_db():
+    """
+    一个辅助函数，在需要时从数据库获取OIDC配置。
+    """
+    try:
+        from apps.configuration.models import IntegrationSettings
+        return IntegrationSettings.get_solo()
+    except Exception:
+        # 如果在初始迁移等阶段数据库不可用，返回一个None对象
+        return None
+
+class LazyConfig:
+    def __init__(self, getter):
+        self._getter = getter
+        self._config = None
+
+    def __getattr__(self, name):
+        if self._config is None:
+            self._config = self._getter()
+
+        if self._config is None:
+            # 如果数据库对象仍然无法获取，返回空字符串
+            return ''
+
+        return getattr(self._config, name.lower(), '')
+
+_lazy_oidc_config = LazyConfig(get_oidc_config_from_db)
+
+OIDC_RP_CLIENT_ID = SimpleLazyObject(lambda: _lazy_oidc_config.OIDC_RP_CLIENT_ID)
+OIDC_RP_CLIENT_SECRET = SimpleLazyObject(lambda: _lazy_oidc_config.OIDC_RP_CLIENT_SECRET)
+
 
 # 【重要】请将下面 JWKS URL 中的 'vss-oidc-provider' 替换为您的真实 Provider Slug
 # 用户浏览器重定向地址 (必须使用外部可访问的地址)
@@ -227,7 +259,6 @@ OIDC_OP_JWKS_ENDPOINT = "http://authentik-server:9000/application/o/vss-workbenc
 # 定义登录流程
 LOGIN_URL = '/oidc/authenticate/'
 LOGIN_REDIRECT_URL = '/admin/' # 登录成功后跳转到 Admin 后台
-#LOGIN_REDIRECT_URL = '/' # 登录成功后跳转到 Admin 后台
 LOGOUT_REDIRECT_URL = '/'      # 登出后跳转到 Authentik 主页
 
 # 指定 Authentik 使用的签名算法

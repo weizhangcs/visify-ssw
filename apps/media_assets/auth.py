@@ -1,6 +1,7 @@
 # 文件路径: apps/media_assets/auth.py
 
 from django.contrib.auth.models import User
+from apps.configuration.models import IntegrationSettings  # 新增导入
 
 
 def create_vss_user(claims):
@@ -26,12 +27,17 @@ def create_vss_user(claims):
         user.first_name = claims.get('given_name', '')
         user.last_name = claims.get('family_name', claims.get('name', ''))
 
-        # 【关键】自动授权逻辑：
-        # [重要] ==> 请将下面的 'your-real-admin-email@example.com' 替换为您自己的管理员邮箱
-        if user.email == '920698540@qq.com':
-            user.is_staff = True
-            user.is_superuser = True
-            print(f"User '{email}' has been granted superuser privileges.")
+        # 【重构后】从数据库加载超级管理员邮箱列表
+        try:
+            config_settings = IntegrationSettings.get_solo()
+            superuser_emails = config_settings.get_superuser_emails_as_list()
+
+            if user.email.lower() in superuser_emails:
+                user.is_staff = True
+                user.is_superuser = True
+                print(f"授权策略命中: 用户 '{email}' 已被自动授予超级管理员权限。")
+        except Exception as e:
+            print(f"警告：无法加载超级管理员配置，跳过自动授权。错误: {e}")
 
         user.save()
         print(f"New user '{email}' created from Authentik claims.")
