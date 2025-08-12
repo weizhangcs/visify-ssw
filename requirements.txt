@@ -12,5 +12,7 @@ requests
 celery>=5.0,<6.0
 redis>=4.0,<5.0
 django-cors-headers>=3.14.0,<4.0.0
-mozilla-django-oidc>=2.0.0
 django-solo      # 新增: 用于创建单例模型
+django-unfold # 现代化的 Django Admin 主题
+django-crispy-forms
+crispy-tailwind

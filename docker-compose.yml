@@ -12,8 +12,8 @@ services:
     volumes:
       # 将 PostgreSQL 数据持久化到命名卷中，以防容器被删除时数据丢失
       - postgres_data:/var/lib/postgresql/data/
-      # 在数据库首次启动时，执行脚本以创建额外的数据库（例如 for Authentik）
-      - ./configs/postgres/init-dbs.sh:/docker-entrypoint-initdb.d/init-dbs.sh
+      # 【已移除】不再需要为 Authentik 创建数据库
+      # - ./configs/postgres/init-dbs.sh:/docker-entrypoint-initdb.d/init-dbs.sh
     restart: unless-stopped
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -d $${POSTGRES_DB} -U $${POSTGRES_USER}"]
@@ -112,56 +112,6 @@ services:
       - DJANGO_SESSION_COOKIE_SECURE=False
       - DJANGO_CSRF_COOKIE_SECURE=False
       - CSRF_TRUSTED_ORIGINS=http://localhost:8081
-
-  # --- Authentik 身份认证服务 ---
-  authentik-server:
-    image: ghcr.io/goauthentik/server:2025.6.4
-    container_name: vss-authentik-server
-    restart: unless-stopped
-    command: server
-    environment:
-      AUTHENTIK_SECRET_KEY: ${AUTHENTIK_SECRET_KEY}
-      AUTHENTIK_BOOTSTRAP_PASSWORD: ${AUTHENTIK_BOOTSTRAP_PASSWORD}
-      AUTHENTIK_REDIS__HOST: redis
-      AUTHENTIK_POSTGRESQL__HOST: db
-      AUTHENTIK_POSTGRESQL__USER: ${POSTGRES_USER}
-      AUTHENTIK_POSTGRESQL__NAME: ${AUTHENTIK_POSTGRESQL__NAME}
-      AUTHENTIK_POSTGRESQL__PASSWORD: ${POSTGRES_PASSWORD}
-    volumes:
-      - ./media_root/authentik/media:/media
-      - ./configs/authentik/custom-templates:/templates
-    ports:
-      - "9000:9000"
-      - "9443:9443"
-    depends_on:
-      db:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-
-  authentik-worker:
-    image: ghcr.io/goauthentik/server:2025.6.4
-    container_name: vss-authentik-worker
-    restart: unless-stopped
-    command: worker
-    environment:
-      AUTHENTIK_SECRET_KEY: ${AUTHENTIK_SECRET_KEY}
-      AUTHENTIK_BOOTSTRAP_PASSWORD: ${AUTHENTIK_BOOTSTRAP_PASSWORD}
-      AUTHENTIK_REDIS__HOST: redis
-      AUTHENTIK_POSTGRESQL__HOST: db
-      AUTHENTIK_POSTGRESQL__USER: ${POSTGRES_USER}
-      AUTHENTIK_POSTGRESQL__NAME: ${AUTHENTIK_POSTGRESQL__NAME}
-      AUTHENTIK_POSTGRESQL__PASSWORD: ${POSTGRES_PASSWORD}
-    volumes:
-      - ./media_root/authentik/media:/media
-      - ./configs/authentik/custom-templates:/templates
-      - /var/run/docker.sock:/var/run/docker.sock
-      - ./configs/authentik/certs:/certs
-    depends_on:
-      db:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
 
 # --- 数据卷定义 ---
 volumes:

@@ -2,23 +2,20 @@ import requests
 import json
 from django.conf import settings
 from django.contrib import messages
-from django.http import HttpResponseRedirect, Http404, HttpResponse
+from django.http import HttpResponseRedirect, Http404
 from django.shortcuts import get_object_or_404, redirect
-from django.template import TemplateDoesNotExist
-from django.urls import reverse
+
 from django.contrib.auth.decorators import login_required
-from django.template.loader import render_to_string
+
 from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 from django.core.files.base import ContentFile
 from .models import Media, Asset
-from .tasks import export_data_from_ls, ingest_media_files
+from .tasks import export_data_from_ls, ingest_media_files, generate_narrative_blueprint
 from .services.label_studio import LabelStudioService
 from pathlib import Path
 from django.shortcuts import render
 from django.contrib import admin
-from django.contrib.admin.views.decorators import staff_member_required
-
 
 # 视图一：创建 LS 项目并导入任务
 # 文件路径: apps/media_assets/views.py
@@ -44,7 +41,6 @@ def create_label_studio_project(request, media_id):
     else:
         messages.error(request, message)
         return redirect('admin:media_assets_media_changelist')
-
 
 @login_required
 def mark_asset_as_complete(request, asset_id):
@@ -157,27 +153,47 @@ def trigger_ingest_task(request, media_id):
     return redirect('admin:media_assets_media_change', object_id=media.id)
 
 @login_required
-def status_view(request):
-    """一个简单的视图，用于显示当前登录用户的信息。"""
-    return HttpResponse(f"<h1>Status</h1><p>You are logged in as: {request.user.username}</p>")
+def start_l1_annotation(request, asset_id):
+    """
+    一个视图，用于在跳转到 SubEditor 前，将 L1 状态更新为 'in_progress'。
+    """
+    asset = get_object_or_404(Asset, pk=asset_id)
+    if asset.l1_status == 'pending':
+        asset.l1_status = 'in_progress'
+        asset.save(update_fields=['l1_status'])
 
-@staff_member_required
-def debug_oidc_config_view(request):
-    """
-    一个临时的、用于单元测试的视图，
-    旨在独立验证从数据库加载OIDC配置的功能。
-    """
-    client_id = settings.OIDC_RP_CLIENT_ID
-    client_secret = settings.OIDC_RP_CLIENT_SECRET
+    target_url = asset.get_subeditor_url()
+    if target_url:
+        return HttpResponseRedirect(target_url)
+    else:
+        messages.error(request, "无法生成 SubEditor 链接，缺少必要文件。")
+        return redirect('admin:media_assets_asset_changelist')
 
-    html = f"""
-    <h1>OIDC Configuration Debug View</h1>
-    <p>This view directly reads from django.conf.settings at the moment of the request.</p>
-    <hr>
-    <p><b>Type of OIDC_RP_CLIENT_ID:</b> {type(client_id)}</p>
-    <p><b>Value of OIDC_RP_CLIENT_ID:</b> <code>{client_id}</code></p>
-    <br>
-    <p><b>Type of OIDC_RP_CLIENT_SECRET:</b> {type(client_secret)}</p>
-    <p><b>Value of OIDC_RP_CLIENT_SECRET:</b> <code>{client_secret[:4]}... (hidden)</code></p>
+@login_required
+def start_l2_l3_annotation(request, asset_id):
     """
-    return HttpResponse(html)
+    一个视图，用于在跳转到 Label Studio 前，将 L2/L3 状态更新为 'in_progress'。
+    """
+    asset = get_object_or_404(Asset, pk=asset_id)
+    if asset.l2_l3_status == 'pending':
+        asset.l2_l3_status = 'in_progress'
+        asset.save(update_fields=['l2_l3_status'])
+
+    target_url = asset.get_label_studio_task_url()
+    if target_url:
+        return HttpResponseRedirect(target_url)
+    else:
+        messages.error(request, "无法生成 Label Studio 任务链接。")
+        return redirect('admin:media_assets_asset_changelist')
+
+@login_required
+def generate_blueprint(request, media_id):
+    """
+    一个专门用于触发“生成叙事蓝图”后台任务的视图。
+    """
+    media = get_object_or_404(Media, pk=media_id)
+    generate_narrative_blueprint.delay(str(media.id))
+    messages.success(request, f"已为《{media.title}》触发了“生成叙事蓝图”的后台任务。")
+
+    # 将用户重定向回 Media 的编辑页面
+    return redirect('admin:media_assets_media_change', object_id=media.id)
