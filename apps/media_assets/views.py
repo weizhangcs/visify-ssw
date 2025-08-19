@@ -1,3 +1,4 @@
+# 文件路径: apps/media_assets/views.py
 import requests
 import json
 from django.conf import settings
@@ -11,7 +12,8 @@ from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 from django.core.files.base import ContentFile
 from .models import Media, Asset
-from .tasks import export_data_from_ls, ingest_media_files, generate_narrative_blueprint
+from .tasks import export_data_from_ls, ingest_media_files, generate_narrative_blueprint, process_single_asset_files
+from .tasks import generate_character_report, validate_blueprint
 from .services.label_studio import LabelStudioService
 from pathlib import Path
 from django.shortcuts import render
@@ -43,20 +45,16 @@ def create_label_studio_project(request, media_id):
         return redirect('admin:media_assets_media_changelist')
 
 @login_required
-def mark_asset_as_complete(request, asset_id):
-    asset = get_object_or_404(Asset, pk=asset_id)
+def mark_media_l2l3_as_complete(request, media_id):
+    """
+    (正确实现) 接收来自Label Studio的“L2/L3标注完成”信号，并触发数据导出任务。
+    """
+    media = get_object_or_404(Media, pk=media_id)
 
-    # 1. 更新状态
-    asset.l2_l3_status = 'completed'
-    asset.save(update_fields=['l2_l3_status'])
+    export_data_from_ls.delay(str(media.id))
 
-    # 2. 触发后台任务去拉取数据
-    print(f"触发异步任务，从 LS 导出 Asset: {asset.id} 的标注数据。")
-    export_data_from_ls.delay(str(asset.id))
-
-    # 3. 添加成功消息并重定向回 Admin 页面
-    messages.success(request, f"已为《{asset.title}》发送“完成”信号！结果将在后台自动同步。")
-    return redirect('admin:apps_media_assets_asset_change', object_id=asset.id)
+    messages.success(request, f"已为《{media.title}》发送“L2/L3标注完成”信号！结果将在后台自动同步。")
+    return redirect('admin:media_assets_media_change', object_id=media.id)
 
 @csrf_exempt  # 来自外部 JS 的 API 请求，需要禁用 CSRF 保护
 def save_l1_output(request, asset_id):
@@ -196,4 +194,31 @@ def generate_blueprint(request, media_id):
     messages.success(request, f"已为《{media.title}》触发了“生成叙事蓝图”的后台任务。")
 
     # 将用户重定向回 Media 的编辑页面
+    return redirect('admin:media_assets_media_change', object_id=media.id)
+
+@login_required
+def trigger_single_asset_processing(request, asset_id):
+    asset = get_object_or_404(Asset, pk=asset_id)
+    process_single_asset_files.delay(str(asset.id))
+    messages.success(request, f"已为《{asset.title}》启动了手动文件处理任务。")
+    return redirect('admin:media_assets_asset_changelist')
+
+@login_required
+def generate_character_report_view(request, media_id):
+    """
+    一个专门用于触发“生成角色名清单”后台任务的视图。
+    """
+    media = get_object_or_404(Media, pk=media_id)
+    generate_character_report.delay(str(media.id))
+    messages.success(request, f"已为《{media.title}》启动了“生成角色名清单”的后台任务。")
+    return redirect('admin:media_assets_media_change', object_id=media.id)
+
+@login_required
+def validate_blueprint_view(request, media_id):
+    """
+    一个专门用于触发“验证叙事蓝图”后台任务的视图。
+    """
+    media = get_object_or_404(Media, pk=media_id)
+    validate_blueprint.delay(str(media.id))
+    messages.success(request, f"已为《{media.title}》启动了“验证叙事蓝图”的后台任务。")
     return redirect('admin:media_assets_media_change', object_id=media.id)

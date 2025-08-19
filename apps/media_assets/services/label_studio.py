@@ -39,11 +39,16 @@ class LabelStudioService:
             return_to_django_url = request.build_absolute_uri(
                 reverse('admin:media_assets_media_change', args=[media.id])
             )
+            mark_as_complete_url = request.build_absolute_uri(
+                reverse('admin:media_assets_media_mark_l2l3_complete', args=[media.id])
+            )
             expert_instruction_html = f"""
             <h4>操作指南</h4>
             <p>请为《{media.title}》下的所有剧集（Tasks）完成标注。</p>
             <hr style="margin: 20px 0;">
             <a href="{return_to_django_url}" target="_blank" style="...">↩️ 返回 Django 媒资主页</a>
+            <br><br>
+            <a href="{mark_as_complete_url}" style="background-color: #28a745; color: white; padding: 10px; border-radius: 5px; text-decoration: none;">✅ 确认此Media下所有任务已完成</a>
             """
 
             # 3. 调用 API 创建 Project

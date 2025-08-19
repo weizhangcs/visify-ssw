@@ -6,9 +6,6 @@ from pathlib import Path
 from decouple import config
 from django.urls import reverse_lazy
 
-LABEL_STUDIO_URL = config('LABEL_STUDIO_URL', default='')
-LABEL_STUDIO_ACCESS_TOKEN = config('LABEL_STUDIO_ACCESS_TOKEN', default='')
-
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 SECRET_KEY = config('DJANGO_SECRET_KEY')
@@ -18,6 +15,7 @@ ALLOWED_HOSTS = [host.strip() for host in ALLOWED_HOSTS_str.split(',') if host.s
 
 INSTALLED_APPS = [
     'unfold',
+    'unfold.contrib.forms',
     'django.contrib.admin',
     'django.contrib.auth',
     'django.contrib.contenttypes',
@@ -91,13 +89,13 @@ USE_I18N = True
 USE_TZ = True
 
 STATIC_URL = 'static/'
-STATICFILES_DIRS = [BASE_DIR / "static"]
+STATIC_ROOT = BASE_DIR / 'staticfiles'
 MEDIA_URL = '/media/'
 MEDIA_ROOT = BASE_DIR / 'media_root'
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 CELERY_BROKER_URL = config("CELERY_BROKER_URL", default="redis://redis:6379/0")
-CELERY_RESULT_BACKEND = config("CELERY_BROKER_URL", default="redis://redis:6379/0")
+CELERY_RESULT_BACKEND = config("CELERY_BROKER_URL", default="redis://redis:6-379/0")
 CELERY_ACCEPT_CONTENT = ['json']
 CELERY_TASK_SERIALIZER = 'json'
 CELERY_RESULT_SERIALIZER = 'json'
@@ -116,9 +114,11 @@ CORS_ALLOW_METHODS = ["DELETE", "GET", "OPTIONS", "PATCH", "POST", "PUT"]
 CORS_ALLOW_HEADERS = ["accept", "authorization", "content-type", "user-agent", "x-csrftoken", "x-requested-with"]
 
 SUBEDITOR_URL = config("SUBEDITOR_URL", default="http://subeditor:3000")
+LABEL_STUDIO_URL = config('LABEL_STUDIO_INTERNAL_URL', default='http://label-studio:8080')
 LOCAL_MEDIA_URL_BASE = config('LOCAL_MEDIA_URL_BASE', default='http://localhost:9999')
 LABEL_STUDIO_PUBLIC_URL = config("LABEL_STUDIO_PUBLIC_URL", default="http://localhost:8081")
 SUBEDITOR_PUBLIC_URL = config("SUBEDITOR_PUBLIC_URL", default="http://localhost:3000")
+LABEL_STUDIO_ACCESS_TOKEN = config('LABEL_STUDIO_ACCESS_TOKEN', default='')
 
 STORAGE_BACKEND = config('STORAGE_BACKEND', default='local')
 FFMPEG_VIDEO_BITRATE = config('FFMPEG_VIDEO_BITRATE', default='2M')
