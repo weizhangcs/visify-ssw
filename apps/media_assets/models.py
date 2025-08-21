@@ -3,7 +3,7 @@ import uuid
 from django.db import models
 from django.utils import timezone
 from django.conf import settings
-
+from ..workflow.models import BaseJob  # <-- 导入我们的抽象基类
 
 class Media(models.Model):
     """
@@ -105,7 +105,6 @@ class Media(models.Model):
         verbose_name = "媒资（作品）"
         verbose_name_plural = verbose_name
         ordering = ['-created_at']
-
 
 class Asset(models.Model):
     """
@@ -214,3 +213,23 @@ class Asset(models.Model):
         verbose_name = "资产条目（剧集）"
         verbose_name_plural = verbose_name
         ordering = ['media', 'sequence_number']
+
+# TranscodingJob 现在继承了 BaseJob 的所有字段和方法
+class TranscodingJob(BaseJob):
+    # --- TranscodingJob 特有的字段 ---
+    asset = models.ForeignKey(
+        Asset,
+        on_delete=models.CASCADE,
+        related_name="transcoding_jobs",
+        verbose_name="关联媒资"
+    )
+    target_profile = models.CharField(max_length=20, verbose_name="目标规格")
+    # ... 其他转码特有的参数可以放在这里，或者还是用一个 JSONField ...
+    parameters = models.JSONField(default=dict, blank=True)
+
+    def __str__(self):
+        return f"Transcoding Job #{self.id} for {self.asset.title}"
+
+    class Meta:
+        verbose_name = "视频转码任务"
+        verbose_name_plural = verbose_name

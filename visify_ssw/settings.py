@@ -24,6 +24,7 @@ INSTALLED_APPS = [
     'django.contrib.staticfiles',
     'apps.media_assets.apps.MediaAssetsConfig',
     'apps.configuration.apps.ConfigurationConfig',
+    'apps.jobs.apps.JobsConfig',
     'corsheaders',
     'solo',
     'crispy_forms',
@@ -129,7 +130,8 @@ UNFOLD = {
     "SIDEBAR": {
         "navigation": [
             {'title': '工作台', 'items': [{'title': '仪表盘', 'icon': 'space_dashboard', 'link': reverse_lazy('admin:index')}]},
-            {'title': '核心工作流', 'separator': True, 'items': [{'title': '媒资 (作品)', 'link': reverse_lazy('admin:media_assets_media_changelist'), 'icon': 'movie'}, {'title': '资产条目 (剧集)', 'link': reverse_lazy('admin:media_assets_asset_changelist'), 'icon': 'video_library'}]},
+            {'title': '媒资管理', 'separator': True, 'items': [{'title': '媒资 (作品)', 'link': reverse_lazy('admin:media_assets_media_changelist'), 'icon': 'movie'}, {'title': '资产条目 (剧集)', 'link': reverse_lazy('admin:media_assets_asset_changelist'), 'icon': 'video_library'}]},
+            {'title': '工作流任务', 'separator': True, 'items': [{'title': '转码任务', 'link': reverse_lazy('admin:jobs_transcodingjob_changelist'), 'icon': 'movie'}]},
             {'title': '系统设置', 'separator': True, 'items': [{'title': '集成设置', 'link': reverse_lazy('admin:configuration_integrationsettings_changelist'), 'icon': 'hub'}, {'title': '用户', 'link': reverse_lazy('admin:auth_user_changelist'), 'icon': 'group'}, {'title': '用户组', 'link': reverse_lazy('admin:auth_group_changelist'), 'icon': 'groups'}]},
             {'title': '外部工具', 'separator': True, 'items': [{'title': 'Label Studio', 'link': config("LABEL_STUDIO_PUBLIC_URL", default="http://localhost:8081"), 'icon': 'launch', 'target': '_blank'}]}
         ],
