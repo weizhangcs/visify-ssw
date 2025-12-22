@@ -1,8 +1,9 @@
 # apps/workflow/transcoding/tasks.py
 
-import json  # [新增] 用于解析 ffprobe 的 JSON 输出
+import json
 import logging
 import os
+import shutil  # [新增] 用于清理文件夹
 import subprocess
 from pathlib import Path
 
@@ -12,9 +13,11 @@ from django.core.files.base import ContentFile
 from django.db import transaction
 
 from apps.media_assets.models import Media
-from apps.workflow.models import DeliveryJob, TranscodingJob, TranscodingProject
 
-from ..delivery.tasks import run_delivery_job
+# [新增] 引入存储服务
+from apps.media_assets.services.storage import StorageService
+from apps.workflow.models import TranscodingJob, TranscodingProject
+
 from .utils import generate_peaks_from_video
 
 logger = logging.getLogger(__name__)
@@ -53,7 +56,6 @@ def generate_waveform_task(media_id):
     """
     独立任务：为指定 Media 生成波形数据
     """
-    # ... (保持原样，未修改) ...
     logger.info(f"Starting waveform generation for Media {media_id}")
     try:
         media = Media.objects.get(id=media_id)
@@ -83,112 +85,112 @@ def generate_waveform_task(media_id):
 @shared_task(name="apps.workflow.transcoding.tasks.run_transcoding_job")
 def run_transcoding_job(job_id):
     """
-    (V2.5 Duration Fix)
-    执行转码 -> [新增] 提取并更新时长 -> 保存文件 -> 触发分发 -> 更新项目状态
+    (V5.4 Proxy First Strategy)
+    1. FFmpeg: Source -> Proxy MP4 (720p)
+    2. FFprobe: 获取时长
+    3. FFmpeg: Proxy MP4 -> HLS (copy stream, fast slice)
+    4. Storage: 上传 Proxy 和 HLS
     """
     try:
         job = TranscodingJob.objects.select_related("project", "profile", "media__asset").get(id=job_id)
     except TranscodingJob.DoesNotExist:
-        logger.error(f"Job {job_id} not found.")
         return
 
     if job.status == "PENDING":
         job.start()
         job.save()
-    elif job.status != "PROCESSING":
-        logger.warning(f"Job {job_id} is {job.status}, skipping start.")
 
     media = job.media
     if not media.source_video:
-        logger.error(f"Job {job_id}: Media has no source video.")
         job.fail()
         job.save()
-        _check_and_update_project_status(job.project)
         return
 
-    source_video_path = Path(media.source_video.path)
-    temp_output_dir = Path(settings.MEDIA_ROOT) / "temp_transcoding"
-    temp_output_dir.mkdir(parents=True, exist_ok=True)
+    # --- 目录准备 ---
+    source_path = Path(media.source_video.path)
+    work_dir = Path(settings.MEDIA_ROOT) / "temp_transcoding" / str(job.id)
+    work_dir.mkdir(parents=True, exist_ok=True)
 
-    ext = job.profile.container if job.profile.container else "mp4"
-    temp_output_filename = f"{job.id}.{ext}"
-    temp_output_path = temp_output_dir / temp_output_filename
+    proxy_mp4_path = work_dir / "proxy.mp4"
+    hls_dir = work_dir / "hls"
+    hls_dir.mkdir(exist_ok=True)
+    hls_index_path = hls_dir / "index.m3u8"
 
     try:
-        # 1. FFmpeg 执行转码
+        # === Step 1: 生成 Proxy MP4 (重算力) ===
+        # 使用 Profile 中定义的命令，但强制输出到 proxy.mp4
         encoding_params = job.profile.ffmpeg_command.split()
-        command = ["ffmpeg", "-i", str(source_video_path), *encoding_params, str(temp_output_path), "-y"]
 
-        logger.info(f"FFmpeg cmd: {' '.join(command)}")
-        subprocess.run(command, check=True, capture_output=True, text=True, encoding="utf-8")
+        # 确保 Profile 里没有 -f hls 等参数，如果用户手误配置了，这里可能要清洗参数
+        # 简单起见，我们假设 Profile 已经是干净的 MP4 转码参数
+        cmd_proxy = ["ffmpeg", "-i", str(source_path), *encoding_params, str(proxy_mp4_path), "-y"]
 
-        # === [核心新增] 2. FFprobe 提取精确时长并回写 Media ===
+        logger.info(f"Step 1 Transcode: {' '.join(cmd_proxy)}")
+        subprocess.run(cmd_proxy, check=True, capture_output=True, text=True, encoding="utf-8")
+
+        # === Step 2: 获取时长 (基于 Proxy) ===
         try:
-            probe_cmd = [
-                "ffprobe",
-                "-v",
-                "quiet",
-                "-print_format",
-                "json",
-                "-show_format",
-                "-show_streams",
-                str(temp_output_path),
-            ]
+            probe_cmd = ["ffprobe", "-v", "quiet", "-print_format", "json", "-show_format", str(proxy_mp4_path)]
             result = subprocess.run(probe_cmd, check=True, capture_output=True, text=True)
-            metadata = json.loads(result.stdout)
+            meta = json.loads(result.stdout)
+            duration = float(meta["format"]["duration"])
 
-            # 优先尝试从 format 中获取
-            duration_str = metadata.get("format", {}).get("duration")
+            if abs(media.duration - duration) > 0.1:
+                media.duration = duration
+                media.save(update_fields=["duration"])
+        except Exception as e:
+            logger.warning(f"Probe failed: {e}")
 
-            # 如果 format 里没有，尝试从第一个 stream 获取
-            if not duration_str:
-                streams = metadata.get("streams", [])
-                if streams:
-                    duration_str = streams[0].get("duration")
+        # === Step 3: HLS 切片 (轻量级) ===
+        # 直接对 Proxy MP4 进行切片 (copy codec)
+        # -hls_list_size 0: 保留所有切片
+        # -hls_time 10: 10秒一个切片
+        cmd_hls = [
+            "ffmpeg",
+            "-i",
+            str(proxy_mp4_path),
+            "-c",
+            "copy",  # 关键：直接复制流，不重编码，速度极快
+            "-f",
+            "hls",
+            "-hls_time",
+            "10",
+            "-hls_list_size",
+            "0",
+            str(hls_index_path),
+        ]
+        logger.info(f"Step 2 HLS Slice: {' '.join(cmd_hls)}")
+        subprocess.run(cmd_hls, check=True, capture_output=True, text=True, encoding="utf-8")
 
-            if duration_str:
-                exact_duration = float(duration_str)
+        # === Step 4: 存储与交付 (Update V5.5) ===
+        storage = StorageService()
 
-                # 仅当数据库里的时长无效 (0 或 None) 或者你想强制以转码后文件为准时更新
-                # 这里我们强制更新，保证转码后文件与数据库一致
-                if abs(media.duration - exact_duration) > 0.1:  # 只有差异超过0.1秒才更新，减少DB写操作
-                    media.duration = exact_duration
-                    media.save(update_fields=["duration"])
-                    logger.info(f"Updated Media {media.id} duration to {exact_duration}s based on transcoding output.")
-            else:
-                logger.warning(f"Could not extract duration from ffprobe output for Job {job_id}")
+        # 获取包含双路径的结果字典
+        result_map = storage.save_proxy_and_hls(proxy_mp4_path, hls_dir, job)
 
-        except Exception as probe_error:
-            # 探测失败不应阻断流程，记录日志即可
-            logger.error(f"Failed to probe duration for Job {job_id}: {probe_error}")
+        # [核心变更] 分别存储
+        # 1. output_url -> HLS 播放地址 (给前端 VideoPlayer 用)
+        job.output_url = result_map["hls_url"]
 
-        # === [核心新增结束] ===
+        # 2. output_file -> Proxy MP4 物理路径 (给后续 Slicing 算法用)
+        # 这样做还有一个好处：在 Django Admin 点击这个文件，下载的是 MP4，方便人工检查画质
+        job.output_file.name = result_map["proxy_file_path"]
 
-        # 3. 原子化：保存 + 触发分发
-        with transaction.atomic():
-            with open(temp_output_path, "rb") as f:
-                job.output_file.save(temp_output_filename, ContentFile(f.read()), save=False)
+        job.complete()
+        job.save()
 
-            job.queue_for_qa()
-            job.save()
+        # 触发波形
+        if not media.waveform_data:
+            transaction.on_commit(lambda: generate_waveform_task.delay(media.id))
 
-            delivery_job = DeliveryJob.objects.create(source_object=job)
-            transaction.on_commit(lambda: run_delivery_job.delay(delivery_job.id))
-
-            if not job.media.waveform_data:
-                transaction.on_commit(lambda: generate_waveform_task.delay(job.media.id))
-
-        logger.info(f"Job {job_id} finished transcoding, triggering delivery {delivery_job.id}")
-        _check_and_update_project_status(job.project)
+        logger.info(f"Job {job_id} Done. HLS: {job.output_url}, Proxy: {job.output_file.name}")
 
     except Exception as e:
-        logger.error(f"Job {job_id} failed: {e}", exc_info=True)
-        if job:
-            job.fail()
-            job.save()
-            _check_and_update_project_status(job.project)
+        logger.error(f"Transcoding Failed: {e}", exc_info=True)
+        job.fail()
+        job.save()
         raise e
-
     finally:
-        if temp_output_path and temp_output_path.exists():
-            os.remove(temp_output_path)
+        # 清理工作目录
+        if work_dir.exists():
+            shutil.rmtree(work_dir, ignore_errors=True)
