@@ -1,0 +1,7 @@
+# 继承基础依赖
+-r requirements.base.txt
+
+# Media Processing & Scientific Computing
+numpy==1.26.4
+pydub==0.25.1
+# opencv-python-headless  <-- (按需开启，未来 Scene Pre-annotator 视觉部分需要时加入)

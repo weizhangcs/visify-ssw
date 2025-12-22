@@ -1,0 +1,37 @@
+# Dockerfile.media
+FROM crpi-34v4qt829vtet2cy.cn-hangzhou.personal.cr.aliyuncs.com/vss_base/python:3.12-slim
+
+ARG APT_MIRROR=mirrors.aliyun.com
+ARG PIP_MIRROR_URL=https://pypi.tuna.tsinghua.edu.cn/simple/
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1 \
+    PIP_NO_CACHE_DIR=1
+
+# [关键] 保留 FFmpeg 及必要的媒体处理库
+RUN sed -i "s|deb.debian.org|$APT_MIRROR|g" /etc/apt/sources.list.d/debian.sources && \
+    sed -i "s|security.debian.org|$APT_MIRROR|g" /etc/apt/sources.list.d/debian.sources && \
+    apt-get update && \
+    apt-get install -y --no-install-recommends \
+        ffmpeg \
+        gcc \
+        libpq-dev \
+    && apt-get clean && \
+    rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+# [变更] 安装全量媒体依赖
+COPY requirements.base.txt .
+COPY requirements.media.txt .
+RUN pip install --upgrade pip && \
+    pip install --no-cache-dir -i ${PIP_MIRROR_URL} -r requirements.media.txt
+
+COPY . .
+
+RUN useradd -m appuser && chown -R appuser:appuser /app
+USER appuser
+
+# Worker 不需要暴露端口，但可以保留 Healthcheck 逻辑(如果需要)
+CMD ["celery", "-A", "visify_ssw", "worker", "-l", "info"]

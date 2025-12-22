@@ -9,8 +9,8 @@ services:
   web:
     build:
       context: .
+      dockerfile: Dockerfile.workbench  # <--- 明确指定
     volumes:
-      # Mount the local source code to enable hot-reloading
       - .:/app
 
   redis:
@@ -20,5 +20,14 @@ services:
   worker:
     build:
       context: .
+      dockerfile: Dockerfile.workbench
+    volumes:
+      - .:/app
+
+  # [重点] Media Worker (使用重量级 Dockerfile)
+  worker-media:
+    build:
+      context: .
+      dockerfile: Dockerfile.media    # <--- 关键：开发环境也要构建这个特定的镜像
     volumes:
       - .:/app

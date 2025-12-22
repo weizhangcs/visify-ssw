@@ -1,12 +1,19 @@
 import json
+import logging
 import os
 import subprocess
 
-import numpy as np
-from pydub import AudioSegment
+logger = logging.getLogger(__name__)
 
 
 def generate_peaks_from_video(video_path, output_json_path, num_points=2000):
+    try:
+        import numpy as np
+        from pydub import AudioSegment
+    except ImportError:
+        logger.error("NumPy or PyDub not installed. Waveform generation skipped.")
+        return False
+
     """
     从视频生成波形峰值数据 (JSON)。
 

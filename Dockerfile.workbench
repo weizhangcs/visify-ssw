@@ -1,0 +1,39 @@
+# Dockerfile.workbench
+# 基础镜像保持一致
+FROM crpi-34v4qt829vtet2cy.cn-hangzhou.personal.cr.aliyuncs.com/vss_base/python:3.12-slim
+
+ARG APT_MIRROR=mirrors.aliyun.com
+ARG PIP_MIRROR_URL=https://pypi.tuna.tsinghua.edu.cn/simple/
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1 \
+    PIP_NO_CACHE_DIR=1
+
+# [变更] 移除 ffmpeg，仅保留 Web/DB 必要的系统库
+RUN sed -i "s|deb.debian.org|$APT_MIRROR|g" /etc/apt/sources.list.d/debian.sources && \
+    sed -i "s|security.debian.org|$APT_MIRROR|g" /etc/apt/sources.list.d/debian.sources && \
+    apt-get update && \
+    apt-get install -y --no-install-recommends \
+        gcc \
+        libpq-dev \
+    && apt-get clean && \
+    rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+# [变更] 仅复制和安装基础依赖
+COPY requirements.base.txt .
+RUN pip install --upgrade pip && \
+    pip install --no-cache-dir -i ${PIP_MIRROR_URL} -r requirements.base.txt
+
+COPY . .
+
+RUN useradd -m appuser && chown -R appuser:appuser /app
+USER appuser
+
+HEALTHCHECK --interval=30s --timeout=3s \
+  CMD python -c "import requests; requests.get('http://localhost:8000/health')" || exit 1
+
+EXPOSE 8000
+CMD ["python", "manage.py", "runserver", "0.0.0.0:8000"]

@@ -10,3 +10,6 @@ services:
   worker:
     #image: ghcr.io/weizhangcs/vss-workbench:latest
     image: crpi-34v4qt829vtet2cy.cn-hangzhou.personal.cr.aliyuncs.com/vss_edge/workbench:latest
+
+  worker-media:
+    image: crpi-xxx.../vss_edge/media-worker:v1.3.0-alpha.temp  #等待推送后获得完整地址

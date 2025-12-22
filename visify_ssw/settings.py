@@ -219,7 +219,7 @@ LOCAL_MEDIA_URL_BASE = config("LOCAL_MEDIA_URL_BASE", default="http://localhost:
 # ----------------------------------------------------------------------
 
 CELERY_BROKER_URL = config("CELERY_BROKER_URL", default="redis://redis:6379/0")
-CELERY_RESULT_BACKEND = config("CELERY_BROKER_URL", default="redis://redis:6-379/0")
+CELERY_RESULT_BACKEND = config("CELERY_BROKER_URL", default="redis://redis:6379/0")
 CELERY_ACCEPT_CONTENT = ["json"]
 CELERY_TASK_SERIALIZER = "json"
 CELERY_RESULT_SERIALIZER = "json"
@@ -231,6 +231,32 @@ CELERY_IMPORTS = (
     "apps.workflow.inference.tasks",
     "apps.workflow.creative.tasks",
 )
+
+# 定义队列
+CELERY_TASK_DEFAULT_QUEUE = "default"
+CELERY_TASK_QUEUES = {
+    "default": {
+        "exchange": "default",
+        "routing_key": "default",
+    },
+    "media_queue": {
+        "exchange": "media_queue",
+        "routing_key": "media_queue",
+    },
+}
+
+# 定义路由规则 (Router)
+CELERY_TASK_ROUTES = {
+    # 1. 媒体处理任务 -> media_queue
+    "apps.workflow.transcoding.tasks.run_transcoding_job": {"queue": "media_queue"},
+    "apps.workflow.transcoding.tasks.generate_waveform": {"queue": "media_queue"},
+    "apps.workflow.creative.tasks.start_synthesis_task": {"queue": "media_queue"},
+    "apps.workflow.creative.tasks.finalize_synthesis_task": {"queue": "media_queue"},
+    # 2. 预标注 - 切片与上传 (将来实现) -> media_queue
+    "apps.media_assets.tasks.slice_and_upload_task": {"queue": "media_queue"},
+    # 3. 其他所有任务 (Cloud API请求、回调处理、DB操作) -> 默认走 default 队列
+    "*": {"queue": "default"},
+}
 
 # ----------------------------------------------------------------------
 # VII. 外部集成服务 URL/TOKEN (EXTERNAL INTEGRATION SERVICES)
