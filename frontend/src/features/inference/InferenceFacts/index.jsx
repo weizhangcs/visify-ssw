@@ -132,6 +132,18 @@ const InferenceFacts = ({ context }) => {
             render: (text) => <Text code>{text.slice(0, 8)}</Text>,
         },
         {
+            // 1. 颜色和显示判断
+            title: '类型',
+            dataIndex: 'jobType',
+            key: 'jobType',
+            width: 140,
+            render: (text, record) => {
+                const isFacts = record.typeCode === 'FACTS'; // [核心修正 1] 使用 typeCode 判断
+                const color = isFacts ? 'purple' : 'blue';
+                return <Tag color={color}>{text || '未知类型'}</Tag>;
+            }
+        },
+        {
             title: '状态',
             dataIndex: 'status',
             key: 'status',
@@ -141,23 +153,37 @@ const InferenceFacts = ({ context }) => {
                     'COMPLETED': 'success',
                     'RUNNING': 'processing',
                     'FAILED': 'error',
-                    'CREATED': 'default'
+                    'CREATED': 'default',
+                    'PENDING': 'default'
                 };
+                // 确保 RAG 任务失败时能看到失败状态
                 return <Tag color={colors[status] || 'default'}>{record.statusDisplay || status}</Tag>;
             }
         },
         {
-            title: '输入角色',
+            title: '输入参数',
             dataIndex: 'input',
             key: 'input',
             ellipsis: true,
-            render: (input) => {
-                const chars = input?.characters || [];
-                return chars.length > 0 ? (
-                    <Tooltip title={chars.join(', ')}>
-                        <Text>{chars.length} 个角色</Text>
-                    </Tooltip>
-                ) : <Text type="secondary">--</Text>;
+            render: (input, record) => {
+                // [核心修正 2] 使用 typeCode 判断
+                if (record.typeCode === 'FACTS') {
+                    const chars = input?.characters || [];
+                    return chars.length > 0 ? (
+                        <Tooltip title={chars.join(', ')}>
+                            <Text>{chars.length} 个角色</Text>
+                        </Tooltip>
+                    ) : <Text type="secondary">--</Text>;
+                } else if (record.typeCode === 'RAG_DEPLOYMENT') {
+                    // RAG 部署任务的输入是源 FACTS Job ID
+                    const sourceId = input?.source_facts_job_id; // 从 input.params 中获取
+                    return sourceId ? (
+                        <Tooltip title={`源 Job ID: ${sourceId}`}>
+                            <Text type="secondary">源 Job: {sourceId.slice(0, 8)}</Text>
+                        </Tooltip>
+                    ) : <Text type="secondary">自动触发</Text>
+                }
+                return <Text type="secondary">N/A</Text>;
             }
         },
         {
@@ -167,31 +193,7 @@ const InferenceFacts = ({ context }) => {
             width: 160,
             className: 'text-gray-500 text-sm'
         },
-        {
-            title: '知识图谱操作',
-            key: 'rag_action',
-            width: 160,
-            render: (_, record) => {
-                if (record.ragActionUrl) {
-                    return (
-                        <Button
-                            type="primary"
-                            icon={<RocketOutlined />}
-                            size="small"
-                            onClick={() => handleDeployRAG(record.ragActionUrl)}
-                        >
-                            部署知识图谱
-                        </Button>
-                    );
-                } else if (record.status === 'RUNNING') {
-                    return <Text type="secondary" className="text-xs">等待识别完成...</Text>;
-                } else if (record.status === 'FAILED') {
-                    return <Text type="danger" className="text-xs">部署需成功任务</Text>;
-                } else {
-                    return <Text type="secondary" className="text-xs">--</Text>;
-                }
-            }
-        }
+        // [移除 RAG 操作列]
     ];
 
     return (

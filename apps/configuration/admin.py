@@ -12,7 +12,6 @@ class IntegrationSettingsAdmin(ModelAdmin, SingletonModelAdmin):  # <-- 核心�
     fieldsets = (
         ("权限管理 (Authorization)", {"fields": ("superuser_emails",)}),
         # [新增 Fieldset] 外部服务认证 Token
-        ("外部服务认证 (External Tokens)", {"fields": ("label_studio_access_token",)}),  # <-- [新增]
         # [NEW FIELDSET] Cloud Service Configuration
         ("云端服务配置 (Cloud Services)", {"fields": ("cloud_api_base_url", "cloud_instance_id", "cloud_api_key")}),
         # [NEW FIELDSET] 存储后端配置 (Storage Backend)

@@ -243,7 +243,6 @@ LABEL_STUDIO_URL = config("LABEL_STUDIO_INTERNAL_URL", default="http://label-stu
 # 从 .env 读取派生公共 URL (这些仍由 init_setup.sh 管理)
 LABEL_STUDIO_PUBLIC_URL = config("LABEL_STUDIO_PUBLIC_URL", default="http://localhost:8081")
 SUBEDITOR_PUBLIC_URL = config("SUBEDITOR_PUBLIC_URL", default="http://localhost:3000")
-LABEL_STUDIO_ACCESS_TOKEN = config("LABEL_STUDIO_ACCESS_TOKEN", default="")
 
 # --- 云端 API 设置 (从 DB 加载，.env 仅作回退) ---
 CLOUD_API_BASE_URL = getattr(DYNAMIC_SETTINGS, "cloud_api_base_url", None) or config("CLOUD_API_BASE_URL", default="")

@@ -172,10 +172,11 @@ class MediaAnnotation(BaseModel):
     对应单个 Media 的全量工程文件 (l1_output_file)。
     """
 
-    # 物理关联
+    # 媒资关联
     media_id: str
     file_name: str
     source_path: str
+    sequence_number: int
     waveform_url: Optional[str] = None
 
     # 核心数据 (四条轨道)
@@ -245,6 +246,7 @@ class Chapter(BaseModel):
     """
 
     id: str = Field(..., description="章节ID (MediaID)")
+    sequence_number: int = Field(..., description="叙事顺序，用于 VSS Cloud 排序和逻辑处理")
     name: str = Field(..., description="章节名称")
     source_file: str = Field(..., description="关联视频路径")
     duration: float

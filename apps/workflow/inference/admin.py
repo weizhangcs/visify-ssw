@@ -124,11 +124,15 @@ class InferenceProjectAdmin(ModelAdmin):
         context = extra_context or {}
         context.update({"show_save": False, "show_save_and_continue": False, "show_save_and_add_another": False})
 
-        # [修复 1] 规范化 object_id (虽然 UUID 通常不需要，但这是 Admin 规范)
-        obj_id = unquote(object_id)
+        # [核心修复] 在调用 unquote 之前，显式将 UUID 对象转换为字符串。
+        object_id_str = str(object_id)  # <--- [这是关键]
+
+        # [修复 1] 规范化 object_id (现在输入确保是字符串)
+        obj_id = unquote(object_id_str)
 
         # [修复 2] 安全获取对象
         project = self.get_object(request, obj_id)
+
         if project is None:
             # 如果对象不存在（可能被删了，或者 URL 输错了），直接抛出标准的 404 页面
             raise Http404(f"InferenceProject with ID {obj_id} does not exist.")
@@ -177,28 +181,34 @@ class InferenceProjectAdmin(ModelAdmin):
             logger.error(f"Error loading audit report: {e}", exc_info=True)
             error_msg = f"读取数据失败: {str(e)}"
 
-            # 2. 历史列表 (保持不变)
-        jobs_list = InferenceJob.objects.filter(project=project, job_type=InferenceJob.TYPE.FACTS).order_by("-created")
-        history_items = []
+        # 2. 历史列表 (保持不变)
+        # [核心修复] 查询所有相关类型的 Job
+        jobs_list_queryset = InferenceJob.objects.filter(
+            project=project,
+            # 过滤出 FACTS 和 RAG_DEPLOYMENT 两种类型的 Job
+            job_type__in=[InferenceJob.TYPE.FACTS, InferenceJob.TYPE.RAG_DEPLOYMENT],
+        ).order_by(
+            "-created"
+        )  # 按创建时间倒序排列
 
-        # 预先生成部署接口的 Base URL
-        rag_deploy_url_base = reverse("workflow:inference_trigger_rag_deployment", args=[project.id])
+        # 将 QuerySet 转换为列表
+        jobs_list = list(jobs_list_queryset)
+
+        history_items = []
 
         for job in jobs_list:
             input_data = job.input_params if isinstance(job.input_params, dict) else {}
 
-            # [核心合并逻辑] 只有成功的任务，才允许触发部署
-            rag_action_url = rag_deploy_url_base if job.status == "COMPLETED" else None
-
             history_items.append(
                 {
                     "id": str(job.id),
+                    "typeCode": job.job_type,
+                    "jobType": job.get_job_type_display(),
                     "status": job.status,
                     "statusDisplay": job.get_status_display(),
                     "created": job.created.strftime("%Y-%m-%d %H:%M"),
                     "input": input_data,
                     "output": {},
-                    "ragActionUrl": rag_action_url,  # 传递给前端
                 }
             )
 

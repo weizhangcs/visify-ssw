@@ -311,6 +311,7 @@ def finalize_facts_task(job_id: str, cloud_task_data: dict, **kwargs):
     job = None
     try:
         job = InferenceJob.objects.get(id=job_id)
+        project = job.project  # 获取 Project 实例
     except InferenceJob.DoesNotExist:
         logger.error(f"[FactsFinal] 找不到 InferenceJob {job_id}，任务终止。")
         return
@@ -333,6 +334,38 @@ def finalize_facts_task(job_id: str, cloud_task_data: dict, **kwargs):
         job.save()
 
         logger.info(f"[FactsFinal] Job {job_id} (项目 {job.project.id}) 的角色属性识别已完成！")
+        # --- [核心修复：链式触发 RAG 部署任务] ---
+
+        # 1. 查找或创建 RAG 部署 Job
+        # Note: 此时 start_rag_deployment_task 已经被 Celery 识别，可以直接调用
+
+        # 查找最新的 RAG Job 实例，避免重复创建
+        latest_rag_job = (
+            InferenceJob.objects.filter(project=project, job_type=InferenceJob.TYPE.RAG_DEPLOYMENT)
+            .order_by("-created")
+            .first()
+        )
+
+        if latest_rag_job and latest_rag_job.status in [BaseJob.STATUS.PENDING, BaseJob.STATUS.FAILED]:
+            # 重用或重试 Job
+            new_rag_job = latest_rag_job
+            logger.info(f"[FactsFinal] 重用并重置 RAG 任务 {new_rag_job.id}")
+        else:
+            # 创建一个新的 RAG 部署 Job
+            new_rag_job = InferenceJob.objects.create(
+                project=project,
+                job_type=InferenceJob.TYPE.RAG_DEPLOYMENT,
+                status=BaseJob.STATUS.PENDING,
+            )
+
+        # 2. 注入输入参数
+        new_rag_job.input_params = {"source_facts_job_id": str(job.id)}
+        new_rag_job.save()
+
+        # 3. 触发 RAG 任务 (直接使用函数名，Python 在加载完所有函数后可以识别)
+        logger.info(f"[FactsFinal] 触发 RAG 部署任务 {new_rag_job.id} (源 Job: {job.id})...")
+        start_rag_deployment_task.delay(job_id=str(new_rag_job.id))
+
     except Exception as e:
         logger.error(f"[FactsFinal] Job {job_id} 最终化处理失败: {e}", exc_info=True)
         if job:

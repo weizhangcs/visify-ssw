@@ -4,9 +4,9 @@
 
 services:
   web:
-    image: crpi-34v4qt829vtet2cy.cn-hangzhou.personal.cr.aliyuncs.com/vss_edge/workbench:v1.2.0-alpha.4.fix # Define the tag for the built image
+    image: crpi-34v4qt829vtet2cy.cn-hangzhou.personal.cr.aliyuncs.com/vss_edge/workbench:v1.3.0-alpha.temp # Define the tag for the built image
     restart: always
 
   worker:
-    image: crpi-34v4qt829vtet2cy.cn-hangzhou.personal.cr.aliyuncs.com/vss_edge/workbench:v1.2.0-alpha.4.fix # Use the same tag
+    image: crpi-34v4qt829vtet2cy.cn-hangzhou.personal.cr.aliyuncs.com/vss_edge/workbench:v1.3.0-alpha.temp # Use the same tag
     restart: always

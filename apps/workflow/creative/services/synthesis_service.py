@@ -184,7 +184,7 @@ class SynthesisService:
     def _create_video_track(
         self,
         editing_script: List[Dict],
-        blueprint_data: Dict,
+        blueprint_data: Dict,  # ⚠️ blueprint_data 仅用于日志，不再用于核心查找
         source_videos_dir: Path,
         temp_dir: Path,
         asset_id: str,
@@ -194,57 +194,53 @@ class SynthesisService:
         """
         logger.info("步骤 2/3: 正在裁切和拼接B-roll视频轨道...")
 
-        # --- [START OF TEMPORARY FIX: 建立可靠的源视频映射] ---
-        source_media_lookup = {}
+        # --- [START OF MODIFIED LOGIC: 建立 Media ID -> 路径 的可靠映射] ---
+        # 目标: 建立 {Media ID (UUID): Path Object} 的映射，以供 B-roll 片段直接查找
+        source_video_map = {}
         try:
-            # 1. 查找所有 Media 文件
+            # 1. 查找所有 Media 文件 (Media.id 即 Chapter ID - UUID)
             media_files = Media.objects.filter(asset_id=asset_id, source_video__isnull=False)
 
             for media in media_files:
-                # 2. 使用 sequence_number (对应 Chapter ID) 和实际的视频路径建立映射
                 if media.source_video and media.source_video.path and Path(media.source_video.path).is_file():
-                    # 映射键: Chapter ID (字符串形式的 sequence_number)
-                    source_media_lookup[str(media.sequence_number)] = Path(media.source_video.path)
-                    logger.info(f"建立映射: Chapter {media.sequence_number} -> {Path(media.source_video.path).name}")
+                    # 使用 Media ID (UUID) 作为查找键，确保与 editing_script 中的 chapter_id 匹配
+                    source_video_map[str(media.id)] = Path(media.source_video.path)
+                    logger.debug(f"建立映射: Media ID {media.id} -> {Path(media.source_video.path).name}")
 
-            if not source_media_lookup:
+            if not source_video_map:
                 logger.error(f"Asset ID {asset_id} 下没有找到任何可用的源视频文件，请检查 Media.source_video。")
 
         except Exception as e:
             logger.error(f"建立源视频映射时发生错误: {e}", exc_info=True)
+        # --- [END OF MODIFIED LOGIC] ---
 
-        # --- [END OF TEMPORARY FIX] ---
+        # 移除对 blueprint_data 的依赖：
+        # chapters_dict = blueprint_data.get("chapters", {}) # 冗余
+        # scenes_dict = blueprint_data.get("scenes", {}) # 冗余
+        # scene_to_chapter_map = {str(scene["id"]): str(scene["chapter_id"]) for scene in scenes_dict.values()} # 冗余
 
-        chapters_dict = blueprint_data.get("chapters", {})
-        scenes_dict = blueprint_data.get("scenes", {})
-        scene_to_chapter_map = {str(scene["id"]): str(scene["chapter_id"]) for scene in scenes_dict.values()}
-
-        # [修改] chapters 字典中的 source_file 现在是文件名，我们需要找到其绝对路径
-        chapter_map = {}
-        for chap_id in chapters_dict.keys():
-            # [核心修改] 优先使用 ORM 查找的可靠路径
-            if chap_id in source_media_lookup:
-                chapter_map[chap_id] = source_media_lookup[chap_id]
-            else:
-                # 如果 ORM 查找失败 (例如，Media 记录丢失)，回退到原始逻辑 (会失败)
-                chapter_map[chap_id] = None
-                logger.warning(f"Chapter {chap_id} 无法通过 ORM 映射到 Media 文件。")
+        # 核心查找映射现在是 source_video_map，无需额外的 chapter_map
+        # chapter_map = {} # 冗余
 
         clip_files = []
 
-        # 使用 for 循环代替 tqdm (在 Celery 任务中避免使用终端进度条)
         for i, entry in enumerate(editing_script):
             for j, clip in enumerate(entry.get("b_roll_clips", [])):
-                scene_id = str(clip["scene_id"])
-                chapter_id = scene_to_chapter_map.get(scene_id)
-                # 从我们修正后的 chapter_map 中获取路径
-                source_video = chapter_map.get(chapter_id)
+                # --- [适配新 VSS Cloud 输出] ---
+                chapter_id = clip.get("chapter_id")
 
-                # 检查文件存在性，这次检查的是正确的路径
+                if not chapter_id:
+                    logger.warning(f"剪辑片段 {i}-{j} 缺少 chapter_id，跳过。")
+                    continue
+
+                # 直接通过 chapter_id (Media ID) 查找源视频路径
+                source_video = source_video_map.get(chapter_id)
+
+                # 检查文件存在性
                 if not source_video or not source_video.is_file():
-                    # 记录 ERROR 级别的警告，确保用户看到问题
                     logger.error(
-                        f"无法找到场景 {scene_id} 对应的有效源视频文件。请检查 Media.sequence_number 是否与 Blueprint Chapter ID 匹配，或文件是否存在。路径: {source_video}"  # noqa: E501
+                        f"无法找到 Chapter {chapter_id} 对应的有效源视频文件。请检查 Media.id 是否匹配，或文件是否存在。路径: {source_video}"
+                        # noqa: E501
                     )
                     continue
 

@@ -59,6 +59,7 @@ class AnnotationService:
             file_name=job.media.title,
             source_path=source_path,
             duration=job.media.duration,
+            sequence_number=job.media.sequence_number,
             # [注入] 波形图数据 (FileField 自动生成的 URL)
             waveform_url=job.media.waveform_data.url if job.media.waveform_data else None,
         )

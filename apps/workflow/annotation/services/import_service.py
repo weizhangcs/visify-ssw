@@ -15,14 +15,6 @@ logger = logging.getLogger(__name__)
 
 
 class ProjectImportService:
-    """
-    负责将外部导出的工程文件 (ProjectAnnotation JSON) 导入并关联到新的 Asset。
-    核心职责：
-    1. 校验资产匹配度 (Media 数量/顺序)。
-    2. ID 映射 (Replace Old IDs with New Asset IDs)。
-    3. 事务性创建 Project 和 Jobs。
-    """
-
     @classmethod
     @transaction.atomic
     def execute_import(cls, json_file, target_asset_id, project_name_override=None):
@@ -31,75 +23,66 @@ class ProjectImportService:
             data = json.load(json_file)
             target_asset = Asset.objects.get(id=target_asset_id)
 
-            # 2. 基础校验
             imported_annotations = data.get("annotations", {})
-            # 按照 sequence_number 排序 Asset 中的 Media
-            target_medias = target_asset.medias.order_by("sequence_number")
+            # 获取目标 Asset 的所有 Media，建立 Sequence 索引映射，以便 O(1) 查找
+            # Map: { 1: MediaObject, 2: MediaObject }
+            target_media_map = {m.sequence_number: m for m in target_asset.medias.all()}
+            # 同时保留列表用于降级处理
+            target_medias_list = list(target_asset.medias.order_by("sequence_number"))
 
-            if not target_medias.exists():
+            if not target_media_map:
                 raise ValueError(f"目标资产 '{target_asset.title}' 下没有媒体文件，无法导入。")
 
-            # 简单的数量校验 (也可以做更复杂的时长校验)
-            # 注意：导入的数据可能少于 Asset 的媒体数（部分导入），但不应多于。
-            # 这里我们假设是一一对应的全量恢复
-            if len(imported_annotations) != target_medias.count():
-                logger.warning(
-                    f"导入警告: 导入的标注条数 ({len(imported_annotations)}) 与 资产媒体数 ({target_medias.count()}) 不一致。系统将尝试按顺序匹配。"
-                )
-
-            # 3. 创建新项目
+            # 2. 创建新项目
             new_project = AnnotationProject.objects.create(
                 name=project_name_override or f"{data.get('project_name', 'Imported')} (恢复)",
                 asset=target_asset,
-                status="PROCESSING",  # 导入后默认为进行中
+                status="PROCESSING",
                 description=f"从文件导入。原项目ID: {data.get('project_id')}",
             )
 
-            # 4. 核心：移花接木 (Mapping & Injection)
-            # 将 imported_annotations (Dict) 转为 List，按原有的 media 顺序处理
-            # 假设 export JSON 中 annotations 是以 media_id 为 key 的字典
-            # 我们无法依赖字典 key 的顺序，必须依赖数据内部的某种顺序，或者假定 Asset 的 sequence 顺序与导出时的遍历顺序一致。
-            # *最佳策略*: 现在的 Export 是按 sequence 遍历导出的，但 JSON key 是无序的。
-            # *修正*: 我们应该信任 Export 中的列表顺序，或者让用户确认。
-            # 这里简化处理：将 annotations values 转为列表，假定它是按顺序导出的 (export_project_annotation 代码中是按 sequence 遍历的)
+            # 3. 核心：基于 Sequence 的智能匹配
+            # 假设 imported_annotations 是 dict (key=old_media_id) 或 list
+            import_items = (
+                list(imported_annotations.values()) if isinstance(imported_annotations, dict) else imported_annotations
+            )
 
-            sorted_import_items = list(imported_annotations.values())
+            for i, item_data in enumerate(import_items):
+                # --- [架构协同修正点] ---
+                # 优先尝试读取 sequence_number 进行精准匹配
+                seq_num = item_data.get("sequence_number")
+                target_media = None
 
-            # 按顺序一一匹配
-            for i, media in enumerate(target_medias):
-                if i >= len(sorted_import_items):
-                    break  # 媒体比标注多，剩下的不做
+                if seq_num is not None and seq_num in target_media_map:
+                    # Case A: 精准命中 (最佳情况)
+                    target_media = target_media_map[seq_num]
+                elif i < len(target_medias_list):
+                    # Case B: 数据包是旧版本(无seq) 或 序号不匹配，回退到索引对齐
+                    target_media = target_medias_list[i]
+                    if seq_num is not None:
+                        logger.warning(f"导入警告: 序号 {seq_num} 未在目标资产中找到，已回退到按位置索引匹配 Media: {target_media.title}")
+                else:
+                    logger.warning(f"导入跳过: 无法找到匹配的 Media (Index: {i}, Seq: {seq_num})")
+                    continue
 
-                old_anno_data = sorted_import_items[i]
-
-                # --- [关键步骤] 数据清洗与 ID 替换 ---
-                # 1. 替换 media_id
-                old_anno_data["media_id"] = str(media.id)
-                # 2. 替换 file_name
-                old_anno_data["file_name"] = media.title
-                # 3. 替换 source_path (指向新 Asset 的物理文件)
-                old_anno_data["source_path"] = media.source_video.name if media.source_video else ""
-                # 4. 替换 duration (以新 Asset 为准，防止飘移)
-                old_anno_data["duration"] = media.duration or old_anno_data.get("duration", 0)
+                # 4. 数据清洗与 ID 替换 (保持原有逻辑，但基于确认的 target_media)
+                item_data["media_id"] = str(target_media.id)
+                item_data["file_name"] = target_media.title
+                item_data["source_path"] = target_media.source_video.name if target_media.source_video else ""
+                item_data["duration"] = target_media.duration or item_data.get("duration", 0)
+                # 确保 sequence_number 在新项目中也是正确的 (即使是 Case B 回退的情况)
+                item_data["sequence_number"] = target_media.sequence_number
 
                 # 创建 Job
-                job = AnnotationJob.objects.create(
-                    project=new_project, media=media, status="COMPLETED"  # 导入的数据通常是完成态，或者 PROCESSING
-                )
+                job = AnnotationJob.objects.create(project=new_project, media=target_media, status="COMPLETED")
 
-                # 调用 Service 保存 (会自动触发 A/B 备份和 rotate_and_save)
-                # 注意：我们要把处理过的 old_anno_data 重新转回 MediaAnnotation 对象再存，或者直接存 dict
-                # AnnotationService.save_annotation 接受 dict
-                AnnotationService.save_annotation(job, old_anno_data)
+                # 保存标注数据
+                AnnotationService.save_annotation(job, item_data)
 
-                logger.info(f"成功恢复 Job {job.id} (Media: {media.title})")
-
-            # 5. 收尾：生成新项目的 Audit 和 Blueprint
+            # 5. 收尾
             new_project.run_audit()
-
             return new_project
 
         except Exception as e:
-            # 事务会自动回滚
             logger.error(f"导入项目失败: {e}", exc_info=True)
             raise ValueError(f"导入过程中发生错误，已回滚: {str(e)}")

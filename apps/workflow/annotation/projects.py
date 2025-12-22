@@ -201,6 +201,7 @@ class AnnotationProject(BaseProject):
                     name=media_anno.file_name,
                     source_file=media_anno.source_path,
                     duration=media_anno.duration,
+                    sequence_number=media_anno.sequence_number,
                     **clean_data,
                 )
 
