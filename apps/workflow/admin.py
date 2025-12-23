@@ -11,6 +11,7 @@
 # 文件路径: apps/workflow/admin.py
 
 from .annotation.admin import AnnotationProjectAdmin
+from .character_annotation.admin import CharacterAnnotationProjectAdmin
 
 # from .annotation.admin_v2 import AnnotationProjectAdminV2, AnnotationProjectV2
 from .creative.admin import CreativeProjectAdmin
@@ -29,4 +30,5 @@ __all__ = [
     "TranscodingProjectAdmin",
     # "AnnotationProject",
     "AnnotationProjectAdmin",
+    "CharacterAnnotationProjectAdmin",
 ]

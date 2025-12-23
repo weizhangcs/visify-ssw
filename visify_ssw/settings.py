@@ -230,6 +230,9 @@ CELERY_IMPORTS = (
     "apps.workflow.annotation.tasks",
     "apps.workflow.inference.tasks",
     "apps.workflow.creative.tasks",
+    "apps.workflow.character_annotation.tasks",
+    "apps.workflow.scene_annotation.tasks",
+    "apps.workflow.common.tasks",
 )
 
 # 定义队列

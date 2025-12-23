@@ -5,9 +5,33 @@ import uuid
 
 from django.conf import settings
 from django.db import models
+from django.utils.translation import gettext_lazy as _
 from model_utils.models import TimeStampedModel
 
 logger = logging.getLogger(__name__)
+
+
+class AssetType(models.TextChoices):
+    MOVIE = "movie", "Movie"
+    SERIES = "series", "Series"
+    SERIES_EPISODE = "series_episode", "Series Episode"
+    SHORT_VIDEO = "short_video", "Short Video"
+    DOCUMENTARY = "documentary", "Documentary"
+    OTHER = "other", "Other"
+
+
+class ContentGenre(models.TextChoices):
+    DRAMA = "drama", "Drama"
+    COMEDY = "comedy", "Comedy"
+    ACTION = "action", "Action"
+    THRILLER = "thriller", "Thriller"
+    SCI_FI = "sci_fi", "Sci-Fi"
+    ROMANCE = "romance", "Romance"
+    HORROR = "horror", "Horror"
+    DOCUMENTARY = "documentary", "Documentary"
+    ANIMATION = "animation", "Animation"
+    FANTASY = "fantasy", "Fantasy"
+    OTHER = "other", "Other"
 
 
 # --- 定义动态路径函数 ---
@@ -19,9 +43,26 @@ def get_subtitle_upload_path(instance, filename):
     return f"source_files/{instance.asset.id}/subtitles/{filename}"
 
 
+def get_waveform_upload_path(instance, filename):
+    # 存放在 source_files 下的 waveforms 目录
+    return f"source_files/{instance.asset.id}/waveforms/{filename}"
+
+
 # --- Asset 模型 (保持不变) ---
 class Asset(TimeStampedModel):
-    ASSET_TYPE_CHOICES = (("short_drama", "短剧"), ("movie", "电影"))
+    # [新增] 核心分类字段
+    asset_type = models.CharField(_("Asset Type"), max_length=50, choices=AssetType.choices, default=AssetType.OTHER)
+
+    content_genre = models.CharField(
+        _("Genre"), max_length=50, choices=ContentGenre.choices, default=ContentGenre.OTHER
+    )
+
+    # [新增] 角色列表：存储 JSON 格式 List[str]，例如 ["Iron Man", "Captain America"]
+    # 使用 JSONField 方便后续扩展 (如包含角色别名)
+    known_characters = models.JSONField(
+        _("Known Characters"), default=list, blank=True, help_text="List of character names known in this asset."
+    )
+
     COPYRIGHT_STATUS_CHOICES = (("pending", "待定"), ("cleared", "已授权"), ("owned", "自有版权"), ("restricted", "受限"))
     LANGUAGE_CHOICES = (("zh-CN", "中文 (简体)"), ("en-US", "英语 (美国)"))
     UPLOAD_STATUS_CHOICES = (("pending", "等待文件上传"), ("uploading", "上传中"), ("completed", "上传完成"), ("failed", "上传失败"))
@@ -29,7 +70,6 @@ class Asset(TimeStampedModel):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     title = models.CharField(max_length=255, verbose_name="资产标题 (Title)")
     description = models.TextField(blank=True, null=True, verbose_name="描述")
-    asset_type = models.CharField(max_length=20, choices=ASSET_TYPE_CHOICES, default="short_drama", verbose_name="资产类型")
     language = models.CharField(max_length=10, choices=LANGUAGE_CHOICES, default="zh-CN", verbose_name="语言")
     copyright_status = models.CharField(
         max_length=20, choices=COPYRIGHT_STATUS_CHOICES, default="pending", verbose_name="版权状态"
@@ -45,11 +85,6 @@ class Asset(TimeStampedModel):
         verbose_name = "内容资产 (Asset)"
         verbose_name_plural = "内容资产 (Asset)"
         ordering = ["-created"]
-
-
-def get_waveform_upload_path(instance, filename):
-    # 存放在 source_files 下的 waveforms 目录
-    return f"source_files/{instance.asset.id}/waveforms/{filename}"
 
 
 # --- Media 模型 (V5.0 重构版) ---
@@ -98,12 +133,10 @@ class Media(TimeStampedModel):
         if encoding_profile:
             try:
                 # [延迟导入] 避免 Circular Import (Media <-> TranscodingJob)
-                from apps.workflow.transcoding.jobs import TranscodingJob
+                from apps.workflow.transcoding.models import TranscodingJob
 
                 job = (
-                    TranscodingJob.objects.filter(
-                        media=self, profile=encoding_profile, status=TranscodingJob.STATUS.COMPLETED
-                    )
+                    TranscodingJob.objects.filter(media=self, profile=encoding_profile, status="COMPLETED")
                     .order_by("-modified")
                     .first()
                 )
