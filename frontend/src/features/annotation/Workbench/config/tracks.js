@@ -16,7 +16,17 @@ export const TRACK_DEFINITIONS = {
             merge: false  // 禁止合并
         },
         // 创建新片段时的默认数据
-        factory: () => ({ label: '新场景' })
+        // [升级] 对齐 V5.3 Schema 的初始数据结构
+        factory: () => ({
+            label: '新场景',
+            location: 'Unknown',
+            scene_type: 'unknown',
+            camera_logic: '',
+            reason: '',
+            tags: [], // 预留标签数组
+            character_dynamics: '',
+            description: ''
+        })
     },
 
     // 2. 高光轨 (复杂数据)

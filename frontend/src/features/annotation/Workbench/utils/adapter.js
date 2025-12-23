@@ -1,10 +1,10 @@
 import { TRACK_DEFINITIONS } from '../config/tracks';
 
 // 定义工程字段集合 (属于 Context 的字段)
-const CONTEXT_FIELDS = ['id', 'is_verified', 'origin', 'ai_meta'];
+const CONTEXT_FIELDS = ['id', 'is_verified', 'origin', 'ai_meta', 'modified_at'];
 
 /**
- * [前端适配器] Backend Schema <-> Timeline Tracks
+ * [前端适配器] Backend Schema -> Timeline Tracks (入站)
  */
 export const transformToTracks = (annotationData) => {
     if (!annotationData) return [];
@@ -16,7 +16,6 @@ export const transformToTracks = (annotationData) => {
         highlights = []
     } = annotationData;
 
-    // 通用转换函数
     const createTrack = (key, dataItems, effectId) => {
         const config = TRACK_DEFINITIONS[key];
         if (!config) return null;
@@ -25,28 +24,30 @@ export const transformToTracks = (annotationData) => {
             id: config.id,
             name: config.label,
             color: config.color,
-            actions: dataItems.map(item => {
-                // 1. 尝试提取嵌套结构
+            actions: dataItems.map((item, index) => {
+                // 1. 提取嵌套结构
                 const content = item.content || {};
                 const context = item.context || {};
 
-                // 2. 兼容扁平结构
-                const isNested = !!item.content;
-                const flatData = isNested ? { ...content, ...context } : { ...item };
+                // 2. 强力打平并标准化字段
+                const flatData = {
+                    ...content,
+                    ...context,
+                };
 
-                // 3. 映射显示标签 (Timeline 上显示的文字)
-                let displayLabel = flatData.label || flatData.type;
-                let displayText = flatData.text || flatData.content; // 读的时候 content -> text
+                // [关键修正] 统一 Dialogues 的显示文本字段
+                // 确保 Timeline 轨道上能看到文字
+                const displayLabel = flatData.label || flatData.text || flatData.content || `Clip ${index + 1}`;
 
                 return {
-                    id: item.id || context.id,
+                    // [关键修正] 确保 ID 绝对唯一，防止 React 渲染失效
+                    id: context.id || item.id || `${key}-${index}-${Date.now()}`,
                     start: item.start,
                     end: item.end,
                     effectId: effectId,
                     data: {
-                        label: displayLabel,
-                        text: displayText, // 统一转为 text 供前端使用
-                        ...flatData
+                        ...flatData,
+                        label: displayLabel // 注入统一的 label 供 UI 显示
                     }
                 };
             })
@@ -62,23 +63,15 @@ export const transformToTracks = (annotationData) => {
 };
 
 /**
- * 反向转换器：Timeline Tracks -> Backend JSON (用于保存)
+ * [反向转换器] Timeline Tracks -> Backend JSON (用于保存/出站)
  */
 export const transformFromTracks = (tracks, originalMeta) => {
-    const scenesTrack = tracks.find(t => t.id === 'scenes');
-    const dialoguesTrack = tracks.find(t => t.id === 'dialogues');
-    const captionsTrack = tracks.find(t => t.id === 'captions');
-    const highlightsTrack = tracks.find(t => t.id === 'highlights');
-
-    // 辅助函数：将扁平 data 拆分为 content 和 context
-    // [修改] 增加 type 参数，用于特殊字段映射
     const reconstructItem = (action, trackType) => {
-        const flatData = action.data;
+        const flatData = action.data || {};
         const content = {};
         const context = {};
 
-        context.id = action.id;
-
+        // 核心逻辑：分流字段
         Object.keys(flatData).forEach(key => {
             if (CONTEXT_FIELDS.includes(key)) {
                 context[key] = flatData[key];
@@ -87,31 +80,28 @@ export const transformFromTracks = (tracks, originalMeta) => {
             }
         });
 
-        // --- 特殊字段映射 (Fix Validation Error) ---
+        // 确保 context.id 始终存在
+        context.id = action.id;
 
-        // 1. Captions: text -> content
+        // --- 针对不同轨道的后端 Schema 适配 (对齐 Pydantic) ---
+
+        // 1. Captions (提词器): 后端 content 字段对应前端 text
         if (trackType === 'captions') {
-            if (content.text) {
-                content.content = content.text;
-                delete content.text; // 移除前端专用字段
-            }
+            content.content = flatData.text || flatData.content || "";
+            delete content.text;
         }
 
-        // 2. Dialogues: 确保 text 存在
+        // 2. Dialogues (对白): 确保 text 存在
         if (trackType === 'dialogues') {
-            if (!content.text) content.text = "";
+            content.text = flatData.text || "";
         }
 
-        // 3. Highlights: 确保 type 存在
-        if (trackType === 'highlights') {
-            // 前端可能用 label 显示类型，保存时确保 type 字段正确
-            if (!content.type && content.label) {
-                content.type = content.label;
-            }
+        // 3. Scenes: 保持原有结构即可，parsers.py 会处理剩下的
+        if (trackType === 'scenes') {
+            // 确保 label 对应后端 narrative_action (如果在后端需要这个映射)
         }
 
         return {
-            id: action.id,
             start: action.start,
             end: action.end,
             content: content,
@@ -119,16 +109,17 @@ export const transformFromTracks = (tracks, originalMeta) => {
         };
     };
 
+    const getActionsByTrackId = (id) => {
+        const track = tracks.find(t => t.id === id);
+        return track ? track.actions.map(a => reconstructItem(a, id)) : [];
+    };
+
     return {
         ...originalMeta,
         updated_at: new Date().toISOString(),
-
-        scenes: scenesTrack ? scenesTrack.actions.map(a => reconstructItem(a, 'scenes')) : [],
-        dialogues: dialoguesTrack ? dialoguesTrack.actions.map(a => reconstructItem(a, 'dialogues')) : [],
-
-        // [关键] 传入 'captions' 类型标记，触发 text->content 映射
-        captions: captionsTrack ? captionsTrack.actions.map(a => reconstructItem(a, 'captions')) : [],
-
-        highlights: highlightsTrack ? highlightsTrack.actions.map(a => reconstructItem(a, 'highlights')) : []
+        scenes: getActionsByTrackId('scenes'),
+        dialogues: getActionsByTrackId('dialogues'),
+        captions: getActionsByTrackId('captions'),
+        highlights: getActionsByTrackId('highlights')
     };
 };

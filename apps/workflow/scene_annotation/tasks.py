@@ -15,7 +15,7 @@ except ImportError:
     # 兼容性处理，防止 IDE 报错，运行时必须存在
     Asset = None
 
-from apps.workflow.character_annotation.services.edge_scene_processor import EdgeSceneProcessor
+from apps.workflow.character_annotation.services.edge_scene_processor import EdgeScenePreprocessor
 from apps.workflow.character_annotation.services.ticket_uploader import VSSCloudService
 
 logger = logging.getLogger(__name__)
@@ -61,7 +61,7 @@ def run_scene_annotation_pipeline(
         work_dir.mkdir(parents=True, exist_ok=True)
 
         # 3. 执行 Edge Processing (耗时操作)
-        processor = EdgeSceneProcessor(work_dir=work_dir, asset_id=str(project.asset_id), media_id=str(media_id))
+        processor = EdgeScenePreprocessor(work_dir=work_dir, asset_id=str(project.asset_id), media_id=str(media_id))
 
         context = processor.process(video_path, ass_path)
         slices_cloud_path = context["slices_file_path"]

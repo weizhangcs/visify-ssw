@@ -120,12 +120,33 @@ class HighlightContent(BaseModel):
 
 
 class SceneContent(BaseModel):
-    label: str
-    description: Optional[str] = None
+    """
+    [V5.3 升级] 场景业务载体
+    完全对齐 Cloud 端 ScenePreAnnotatorResult 的丰富度
+    """
+
+    # 1. 核心标识
+    label: str = Field(..., description="场景标题/简述，对应 narrative_action")
+
+    # 2. 基础属性
+    location: Optional[str] = Field(None, description="主要地点")
+    scene_type: Optional[SceneType] = Field(None, description="功能类型")
+
+    # 3. [新增] 导演/剪辑逻辑
+    camera_logic: Optional[str] = Field(None, description="运镜/剪辑逻辑 (e.g., Static, Fast cuts)")
+    reason: Optional[str] = Field(None, description="AI 分组/切分的理由 (Segmentation Reason)")
+
+    # 4. [新增] 视觉与情绪
+    # 升级：不再只存单个 mood，而是存储完整的标签列表
+    tags: List[str] = Field(default_factory=list, description="视觉氛围标签 (visual_mood_tags)")
+    # 兼容：仍保留 mood 字段作为 '主导情绪'，供旧版 UI 兼容显示
     mood: Optional[SceneMood] = None
-    scene_type: Optional[SceneType] = None
-    location: Optional[str] = None
-    character_dynamics: Optional[str] = None
+
+    # 5. 角色关系
+    character_dynamics: Optional[str] = Field(None, description="角色张力/关系")
+
+    # 6. 其他
+    description: str = Field("", description="补充描述")
     keyframe_url: Optional[str] = None
 
 
