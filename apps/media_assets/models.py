@@ -133,7 +133,7 @@ class Media(TimeStampedModel):
         if encoding_profile:
             try:
                 # [延迟导入] 避免 Circular Import (Media <-> TranscodingJob)
-                from apps.workflow.transcoding.models import TranscodingJob
+                from apps.workflow.transcoding.jobs import TranscodingJob
 
                 job = (
                     TranscodingJob.objects.filter(media=self, profile=encoding_profile, status="COMPLETED")
@@ -141,8 +141,8 @@ class Media(TimeStampedModel):
                     .first()
                 )
 
-                if job and job.output_url:
-                    target_url = job.output_url
+                if job and job.output_file:
+                    target_url = job.output_file
             except Exception as e:
                 logger.warning(f"查找转码任务失败: {e}")
 

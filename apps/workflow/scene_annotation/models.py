@@ -1,58 +1,64 @@
+# apps/workflow/scene_annotation/models.py
+
 from django.db import models
 from django.utils.translation import gettext_lazy as _
-from model_utils.models import TimeStampedModel
+from django_fsm import FSMField
+from model_utils import Choices
+
+from ..common.baseJob import BaseJob
+
+# 严格对齐 Transcoding 范式：引入基类
+from ..common.baseProject import BaseProject
 
 
-class SceneAnnotationProject(TimeStampedModel):
+class SceneAnnotationProject(BaseProject):
     """
     场景标注项目 (Asset 级别)
-    通常一个 Asset 对应一个 Project，管理其下所有的 Job
+    范式：继承 BaseProject，使用外键关联 Asset，引入 FSMField 状态机
     """
 
-    asset_id = models.UUIDField(verbose_name=_("Asset ID"), db_index=True)
-    # 冗余字段方便查询
-    title = models.CharField(max_length=255, verbose_name=_("Project Title"), blank=True)
+    STATUS = Choices(("PENDING", _("等待开始")), ("PROCESSING", _("处理中")), ("COMPLETED", _("已完成")), ("FAILED", _("失败")))
 
-    class Meta:
-        verbose_name = _("Scene Annotation Project")
-        verbose_name_plural = _("Scene Annotation Projects")
+    # 对齐 TranscodingProject：外键关联 Asset
+    asset = models.ForeignKey(
+        "media_assets.Asset", on_delete=models.CASCADE, related_name="scene_annotation_projects", verbose_name=_("关联资产")
+    )
+
+    name = models.CharField(max_length=255, verbose_name=_("项目名称"))
+    description = models.TextField(blank=True, null=True, verbose_name=_("项目描述"))
+
+    # 对齐 TranscodingProject：使用 FSMField 管理状态
+    status = FSMField(
+        default=STATUS.PENDING,
+        verbose_name=_("项目状态"),
+    )
 
     def __str__(self):
-        return f"{self.title} ({self.asset_id})"
+        return self.name
+
+    class Meta:
+        verbose_name = _("场景标注项目")
+        verbose_name_plural = _("场景标注项目")
 
 
-class SceneAnnotationJob(TimeStampedModel):
+class SceneAnnotationJob(BaseJob):
     """
     场景标注执行任务 (Media/Execution 级别)
-    记录每次运行的状态、Cloud Task ID 以及最终结果
+    范式：继承 BaseJob，关联具体的物理媒资
     """
 
-    class Status(models.TextChoices):
-        PENDING = "PENDING", _("Pending")
-        PROCESSING = "PROCESSING", _("Processing (Slicing/Uploading)")
-        CLOUD_SUBMITTED = "CLOUD_SUBMITTED", _("Submitted to Cloud")
-        COMPLETED = "COMPLETED", _("Completed")
-        FAILED = "FAILED", _("Failed")
+    project = models.ForeignKey(
+        SceneAnnotationProject, on_delete=models.CASCADE, related_name="scene_annotation_jobs", verbose_name=_("所属场景项目")
+    )
 
-    project = models.ForeignKey(SceneAnnotationProject, on_delete=models.CASCADE, related_name="jobs")
+    media = models.ForeignKey(
+        "media_assets.Media", on_delete=models.CASCADE, related_name="scene_annotation_jobs", verbose_name=_("关联媒体文件")
+    )
 
-    # 关联具体的物理媒资
-    media_id = models.UUIDField(verbose_name=_("Media ID"), db_index=True)
-
-    # Cloud 侧返回的任务 ID，用于轮询
-    cloud_task_id = models.CharField(max_length=64, blank=True, null=True, db_index=True)
-
-    status = models.CharField(max_length=32, choices=Status.choices, default=Status.PENDING)
-
-    # 存储最终结果 (Cloud 返回的 Scenes)
-    result = models.JSONField(verbose_name=_("Result Data"), blank=True, null=True)
-
-    # 错误信息
-    error_message = models.TextField(blank=True)
+    cloud_task_id = models.CharField(max_length=64, blank=True, null=True, db_index=True, verbose_name=_("云端任务ID"))
+    result = models.JSONField(verbose_name=_("结果数据"), blank=True, null=True)
 
     class Meta:
+        verbose_name = _("场景标注任务日志")
+        verbose_name_plural = _("场景标注任务日志")
         ordering = ["-created"]
-        verbose_name = _("Scene Annotation Job")
-
-    def __str__(self):
-        return f"Job {self.id} - {self.get_status_display()}"

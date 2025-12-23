@@ -12,11 +12,10 @@
 
 from .annotation.admin import AnnotationProjectAdmin
 from .character_annotation.admin import CharacterAnnotationProjectAdmin
-
-# from .annotation.admin_v2 import AnnotationProjectAdminV2, AnnotationProjectV2
 from .creative.admin import CreativeProjectAdmin
 from .delivery.admin import DeliveryJobAdmin
 from .inference.admin import InferenceProjectAdmin
+from .scene_annotation.admin import SceneAnnotationProjectAdmin
 from .transcoding.admin import TranscodingJobAdmin, TranscodingProjectAdmin
 
 # 显式声明导出列表，既满足了 Flake8 的 F401 检查，
@@ -28,7 +27,7 @@ __all__ = [
     "InferenceProjectAdmin",
     "TranscodingJobAdmin",
     "TranscodingProjectAdmin",
-    # "AnnotationProject",
     "AnnotationProjectAdmin",
     "CharacterAnnotationProjectAdmin",
+    "SceneAnnotationProjectAdmin",
 ]

@@ -29,8 +29,12 @@ def run_scene_annotation_pipeline(
     执行场景预标注全流程
     [Fix]: 动态从 Asset 模型获取元数据 (type, genre, lang)
     """
+    logger.info("确认task被触发")
     job_id = None
     try:
+        # 认领 View 层创建的 PENDING Job
+        job = SceneAnnotationJob.objects.get(project_id=project_id, media_id=media_id, status="PENDING")
+
         # 1. 初始化 Job 与 Project
         project = SceneAnnotationProject.objects.get(id=project_id)
 
@@ -45,12 +49,6 @@ def run_scene_annotation_pipeline(
             # 如果没有 Asset 模型定义的 fallback (仅供调试，生产环境应报错)
             logger.warning("Asset model not imported correctly.")
             asset_obj = None
-
-        job = SceneAnnotationJob.objects.create(
-            project=project, media_id=media_id, status=SceneAnnotationJob.Status.PROCESSING
-        )
-        job_id = job.id
-        logger.info(f"[Job {job_id}] Starting Pipeline for Asset: {asset_obj.title if asset_obj else 'Unknown'}")
 
         # 2. 准备工作目录
         if work_dir_root:

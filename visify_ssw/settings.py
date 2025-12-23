@@ -331,13 +331,23 @@ UNFOLD = {
                 ],
             },
             {
-                "title": "转码工作流",
+                "title": "视频预处理",
                 "separator": True,
                 "items": [
                     {
                         "title": "转码项目",
                         "icon": "movie_filter",
                         "link": reverse_lazy("admin:workflow_transcodingproject_changelist"),
+                    },
+                    {
+                        "title": "角色标注项目",  # Character Annotation 入口
+                        "icon": "face",
+                        "link": reverse_lazy("admin:workflow_characterannotationproject_changelist"),
+                    },
+                    {
+                        "title": "场景标注项目",  # Scene Annotation 入口
+                        "icon": "auto_awesome_motion",
+                        "link": reverse_lazy("admin:workflow_sceneannotationproject_changelist"),
                     },
                     {
                         "title": "转码任务",
