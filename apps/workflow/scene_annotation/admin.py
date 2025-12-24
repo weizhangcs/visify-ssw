@@ -46,8 +46,14 @@ class SceneAnnotationProjectAdmin(ModelAdmin):
 
 @admin.register(SceneAnnotationJob)
 class SceneAnnotationJobAdmin(ModelAdmin):
-    # 对齐 TranscodingJobAdmin 布局
     list_display = ("media", "project", "status", "cloud_task_id", "modified")
     list_filter = ("status", "project")
-    readonly_fields = ("project", "media", "cloud_task_id", "result")
+    # [新增] 将 error_message 加入只读字段，方便排查
+    readonly_fields = ("project", "media", "cloud_task_id", "result", "error_message")
     list_per_page = 20
+
+    # 优化：如果是 ERROR 状态，列表页标红显示
+    def get_row_css(self, obj, index):
+        if obj.status == "ERROR":
+            return "bg-red-50"
+        return ""

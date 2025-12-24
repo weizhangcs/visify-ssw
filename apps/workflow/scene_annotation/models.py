@@ -58,6 +58,8 @@ class SceneAnnotationJob(BaseJob):
     cloud_task_id = models.CharField(max_length=64, blank=True, null=True, db_index=True, verbose_name=_("云端任务ID"))
     result = models.JSONField(verbose_name=_("结果数据"), blank=True, null=True)
 
+    error_message = models.TextField(blank=True, null=True, verbose_name=_("错误日志"))
+
     class Meta:
         verbose_name = _("场景标注任务日志")
         verbose_name_plural = _("场景标注任务日志")

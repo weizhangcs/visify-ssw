@@ -12,12 +12,19 @@ logger = logging.getLogger(__name__)
 
 
 class AssetType(models.TextChoices):
-    MOVIE = "movie", "Movie"
-    SERIES = "series", "Series"
-    SERIES_EPISODE = "series_episode", "Series Episode"
-    SHORT_VIDEO = "short_video", "Short Video"
-    DOCUMENTARY = "documentary", "Documentary"
-    OTHER = "other", "Other"
+    """
+    [Core Contract]
+    与 Cloud 端 Schema 对齐。
+    Cloud 端将同步增加 'other' 枚举值以支持兜底。
+    """
+
+    FEATURE_FILM = "feature_film", "电影 (Feature Film)"
+    SERIES_EPISODE = "series_episode", "剧集 (Series Episode)"
+    SHORT_CLIP = "short_clip", "短片 (Short Clip)"
+    DOCUMENTARY = "documentary", "纪录片 (Documentary)"
+    RAW_FOOTAGE = "raw_footage", "素材 (Raw Footage)"
+    # [恢复] 兜底选项，Cloud端需同步支持
+    OTHER = "other", "其他 (Other)"
 
 
 class ContentGenre(models.TextChoices):
@@ -50,7 +57,7 @@ def get_waveform_upload_path(instance, filename):
 
 # --- Asset 模型 (保持不变) ---
 class Asset(TimeStampedModel):
-    # [新增] 核心分类字段
+    # [恢复] 默认值设为 OTHER，作为安全兜底
     asset_type = models.CharField(_("Asset Type"), max_length=50, choices=AssetType.choices, default=AssetType.OTHER)
 
     content_genre = models.CharField(
@@ -141,8 +148,8 @@ class Media(TimeStampedModel):
                     .first()
                 )
 
-                if job and job.output_file:
-                    target_url = job.output_file
+                if job and job.output_url:
+                    target_url = job.output_url
             except Exception as e:
                 logger.warning(f"查找转码任务失败: {e}")
 
@@ -171,6 +178,45 @@ class Media(TimeStampedModel):
         base = settings.LOCAL_MEDIA_URL_BASE.rstrip("/")
         path = url_str.lstrip("/")
         return f"{base}/{path}"
+
+    def get_best_processing_path(self):
+        """
+        [新增] 获取最佳处理源文件的物理路径 (用于 AI/CV 处理)。
+        策略:
+        1. 优先查找已完成的转码任务产出的 Proxy MP4 (体积小，解码快)。
+        2. 兜底使用 source_video (原始母带)。
+
+        注意：返回的是文件系统的绝对路径 (path)，而非 URL。
+        """
+        target_path = None
+
+        # 1. 尝试查找转码任务 (Proxy)
+        try:
+            # 延迟导入避免循环依赖
+            from apps.workflow.transcoding.jobs import TranscodingJob
+
+            # 查找该 Media 下最新完成的转码任务
+            job = TranscodingJob.objects.filter(media=self, status="COMPLETED").order_by("-modified").first()
+
+            # TranscodingJob.output_file 存储的是 Proxy MP4 的路径
+            if job and job.output_file:
+                # 确认文件物理存在
+                if job.output_file.storage.exists(job.output_file.name):
+                    target_path = job.output_file.path
+                    logger.info(f"Using Proxy Video for processing: {target_path}")
+        except Exception as e:
+            logger.warning(f"Error resolving transcoding job for media {self.id}: {e}")
+
+        # 2. 兜底策略：使用源文件
+        if not target_path and self.source_video:
+            try:
+                target_path = self.source_video.path
+                logger.warning(f"Proxy not found, falling back to Source Video: {target_path}")
+            except NotImplementedError:
+                # 处理某些云存储 backend 不支持 .path 的情况
+                logger.error("Storage backend does not support .path access.")
+
+        return target_path
 
     class Meta:
         verbose_name = "媒体文件 (Media)"
