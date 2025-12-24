@@ -71,7 +71,7 @@ export const TRACK_DEFINITIONS = {
             split: true,
             merge: true
         },
-        factory: () => ({ text: '新提词', category: 'General' })
+        factory: () => ({ text: '新提词', category: 'other' })
     }
 };
 

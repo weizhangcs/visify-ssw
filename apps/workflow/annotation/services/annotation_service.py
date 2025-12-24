@@ -1,9 +1,10 @@
-# apps/workflow/annotation/services/annotation_service.py
-
 import json
 import logging
-import os
 from datetime import datetime
+
+# [新增] 引入上游业务模型
+from apps.workflow.character_annotation.models import CharacterAnnotationJob
+from apps.workflow.scene_annotation.models import SceneAnnotationJob
 
 from ...common.baseJob import BaseJob
 
@@ -18,8 +19,8 @@ class AnnotationService:
     @staticmethod
     def load_annotation(job) -> MediaAnnotation:
         """
-        [数据加载与冷启动注入 - V2]
-        支持 SRT/ASS 字幕注入 + JSON 场景注入
+        [数据加载与冷启动注入 - V3 Real Data]
+        动态加载 Character (ASS) 和 Scene (JSON) 的真实产出物。
         """
         # --- A. 热数据加载 (保持不变) ---
         if job.annotation_file:
@@ -36,7 +37,7 @@ class AnnotationService:
                 # 降级进入冷启动
 
         # --- B. 冷启动 (Cold Start) ---
-        logger.info(f"Job {job.id}: Starting cold start initialization...")
+        logger.info(f"Job {job.id}: Starting cold start initialization with REAL upstream data...")
 
         # 1. 基础骨架
         source_path = ""
@@ -53,43 +54,63 @@ class AnnotationService:
         )
 
         # =========================================================
-        # [核心升级] 注入逻辑
+        # [核心修复] 动态注入真实业务数据
         # =========================================================
 
-        # 1. 强制注入对白 (Character ASS)
-        # 1. 强制注入对白 (MOCK ASS)
+        # 1. 注入对白 (From CharacterAnnotationJob)
         try:
-            mock_ass_path = "/app/media_root/character_annotation/outputs/2025/12/23/EP02_ai.ass"
-            if os.path.exists(mock_ass_path):
-                with open(mock_ass_path, "r", encoding="utf-8") as f:
-                    raw_content = f.read()
-                    # [诊断点] 打印原始文件的前 200 个字符，确认编码和内容是否正常
-                    logger.info(f"MOCK ASS Sample: {raw_content[:200]!r}")
+            # 查找该 Media 下最新完成的角色标注任务
+            char_job = (
+                CharacterAnnotationJob.objects.filter(media=job.media, status=BaseJob.STATUS.COMPLETED)
+                .order_by("-modified")
+                .first()
+            )
 
-                    if raw_content.strip():
-                        media_anno.dialogues = parse_ass_content(raw_content)
-                        logger.info(f"MOCK ASS Parse Result Count: {len(media_anno.dialogues)}")
-                    else:
-                        logger.error("MOCK ASS file is EMPTY")
+            if char_job and char_job.output_ass_file:
+                try:
+                    with char_job.output_ass_file.open("r") as f:
+                        raw_content = f.read()
+                        if isinstance(raw_content, bytes):
+                            raw_content = raw_content.decode("utf-8", errors="ignore")
+
+                        if raw_content.strip():
+                            media_anno.dialogues = parse_ass_content(raw_content)
+                            logger.info(
+                                f"Injected {len(media_anno.dialogues)} dialogues from CharacterJob {char_job.id}"
+                            )
+                except Exception as e:
+                    logger.error(f"Failed to read ASS file from CharacterJob {char_job.id}: {e}")
+            else:
+                logger.warning(
+                    f"No completed CharacterAnnotationJob found for Media {job.media.id}. Dialogues will be empty."
+                )
+
         except Exception as e:
-            logger.error(f"MOCK ASS Error: {e}", exc_info=True)
+            logger.error(f"Error injecting dialogues: {e}", exc_info=True)
 
-        # 2. 强制注入场景 (MOCK JSON)
+        # 2. 注入场景 (From SceneAnnotationJob)
         try:
-            mock_json_path = "/app/tests/testdata/scene_annotation_result_232.json"
-            if os.path.exists(mock_json_path):
-                with open(mock_json_path, "r", encoding="utf-8") as f:
-                    raw_json = f.read()
-                    # [诊断点] 打印 JSON 采样
-                    logger.info(f"MOCK JSON Sample: {raw_json[:200]!r}")
+            # 查找该 Media 下最新完成的场景标注任务
+            scene_job = (
+                SceneAnnotationJob.objects.filter(media=job.media, status=BaseJob.STATUS.COMPLETED)
+                .order_by("-modified")
+                .first()
+            )
 
-                    if raw_json.strip():
-                        media_anno.scenes = parse_scene_json_content(raw_json)
-                        logger.info(f"MOCK JSON Parse Result Count: {len(media_anno.scenes)}")
+            # SceneJob 的结果直接存储在 JSONField (result) 中
+            if scene_job and scene_job.result:
+                try:
+                    # parse_scene_json_content 支持直接传入 Dict
+                    media_anno.scenes = parse_scene_json_content(scene_job.result)
+                    logger.info(f"Injected {len(media_anno.scenes)} scenes from SceneJob {scene_job.id}")
+                except Exception as e:
+                    logger.error(f"Failed to parse result from SceneJob {scene_job.id}: {e}")
+            else:
+                logger.warning(f"No completed SceneAnnotationJob found for Media {job.media.id}. Scenes will be empty.")
+
         except Exception as e:
-            logger.error(f"MOCK JSON Error: {e}", exc_info=True)
+            logger.error(f"Error injecting scenes: {e}", exc_info=True)
 
-        logger.info(f"Final Count - Scenes: {len(media_anno.scenes)}, Dialogues: {len(media_anno.dialogues)}")
         return media_anno
 
     @staticmethod
@@ -111,8 +132,7 @@ class AnnotationService:
         # 3. 序列化
         json_content = annotation.model_dump_json(indent=2, exclude_none=True)
 
-        # [修改] 使用 Job 的轮转保存方法，而不是直接 file.save
-        # 这样每次保存都会自动生成一个 Backup
+        # 使用 Job 的轮转保存方法 (A/B Buffer)
         job.rotate_and_save(json_content, save_to_db=True)
 
         # 更新状态为 PROCESSING (如果之前是 PENDING)

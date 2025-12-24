@@ -1,161 +1,289 @@
 /* frontend/src/features/annotation/Workbench/components/inspectors/inspector.css */
 
-/* --- 变量定义 --- */
-:root {
-    --insp-bg-main: #ffffff;
+/* --- 变量定义 (限定作用域，防止污染全局 :root) --- */
+.vss-inspector-panel {
     --insp-bg-body: #f8fafc;
+    --insp-card-bg: #ffffff;
     --insp-border-color: #e2e8f0;
     --insp-text-primary: #0f172a;
     --insp-text-secondary: #64748b;
+    --insp-text-placeholder: #94a3b8;
+
     --insp-primary-color: #6366f1;
-    --insp-primary-focus: rgba(99, 102, 241, 0.15); /* 新增：Focus 阴影色 */
-    --insp-input-hover: #cbd5e1; /* 新增：Input Hover 边框色 */
-    --insp-input-radius: 6px;
-    --insp-danger-bg: #fef2f2;
+    --insp-primary-hover: #4f46e5;
     --insp-danger-text: #ef4444;
+    --insp-danger-bg-hover: #fef2f2;
+
+    --insp-radius-md: 6px;
+    --insp-radius-lg: 12px;
+    --insp-radius-pill: 9999px;
 }
 
-/* --- 基础容器 --- */
-.inspector-form {
+/* --- 全局重置 (仅限面板内) --- */
+.vss-inspector-panel {
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    /* 确保面板自身不会意外撑大影响布局 */
+    overflow: hidden;
+    box-sizing: border-box;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+}
+
+/* --- 卡片容器 --- */
+.vss-inspector-panel .inspector-card {
+    background-color: var(--insp-card-bg);
+    border-radius: var(--insp-radius-lg);
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03);
+    border: 1px solid var(--insp-border-color);
     display: flex;
     flex-direction: column;
     height: 100%;
-    /* 移除冗余的 font-family，默认继承全局设置 */
-    color: var(--insp-text-primary);
-    background-color: var(--insp-bg-main);
+    overflow: hidden;
 }
 
-/* --- 顶部 Header --- */
-.inspector-header {
-    flex-shrink: 0;
+/* --- 滚动区域 --- */
+.vss-inspector-panel .inspector-scroll-area {
+    flex: 1;
+    overflow-y: auto;
     padding: 20px 24px;
-    border-bottom: 1px solid var(--insp-border-color);
-    /* 背景色继承自父容器，无需重复声明，除非 body 颜色穿透 */
-    background-color: var(--insp-bg-main);
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
 }
 
-.inspector-title {
+/* --- 表单元素 (加前缀防止污染) --- */
+.vss-inspector-panel .form-group {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.vss-inspector-panel .form-label {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--insp-text-secondary);
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    margin-bottom: 0; /* 复位可能受到的外部影响 */
+}
+
+.vss-inspector-panel .form-label.required::after {
+    content: "*";
+    color: var(--insp-danger-text);
+    margin-left: 2px;
+}
+
+/* --- 覆盖 Ant Design 输入框 (严格限定在面板内) --- */
+.vss-inspector-panel .ant-input,
+.vss-inspector-panel .ant-select-selector,
+.vss-inspector-panel .form-textarea {
+    border-radius: var(--insp-radius-md) !important;
+    border-color: var(--insp-border-color) !important;
+    font-size: 13px !important;
+    color: var(--insp-text-primary) !important;
+    transition: all 0.2s ease;
+    box-shadow: none !important; /* 移除 Antd 默认阴影 */
+}
+
+.vss-inspector-panel .ant-input:hover,
+.vss-inspector-panel .ant-select-selector:hover {
+    border-color: #cbd5e1 !important;
+}
+
+.vss-inspector-panel .ant-input:focus,
+.vss-inspector-panel .ant-select-selector:focus-within,
+.vss-inspector-panel .form-textarea:focus {
+    border-color: var(--insp-primary-color) !important;
+    box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1) !important;
+    outline: none;
+}
+
+/* --- 组合时间输入框 --- */
+.vss-inspector-panel .time-input-container {
+    display: flex;
+    align-items: center;
+    border: 1px solid var(--insp-border-color);
+    border-radius: var(--insp-radius-md);
+    background-color: #fff;
+    padding: 4px 8px;
+    height: 32px;
+    transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.vss-inspector-panel .time-input-container:focus-within {
+    border-color: var(--insp-primary-color);
+    box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
+}
+
+.vss-inspector-panel .time-input-container input {
+    border: none;
+    outline: none;
+    width: 48px;
+    text-align: center;
+    font-size: 13px;
+    font-family: monospace;
+    font-weight: 500;
+    color: var(--insp-text-primary);
+    background: transparent;
+    padding: 0;
+    margin: 0;
+}
+
+.vss-inspector-panel .time-arrow {
+    color: var(--insp-text-secondary);
+    margin: 0 4px;
+    font-size: 12px;
+    user-select: none;
+}
+
+.vss-inspector-panel .duration-badge {
+    margin-left: auto;
+    background-color: #f1f5f9;
+    color: var(--insp-text-secondary);
+    font-size: 10px;
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-weight: 600;
+    user-select: none;
+}
+
+/* --- 标签样式 --- */
+.vss-inspector-panel .ant-select-selection-item {
+    border-radius: var(--insp-radius-pill) !important;
+    background-color: #e0e7ff !important;
+    color: #4338ca !important;
+    border: none !important;
+    font-size: 12px !important;
+    font-weight: 500;
+    padding-left: 8px !important;
+}
+
+.vss-inspector-panel .ant-select-selection-item-remove {
+    color: #6366f1 !important;
+}
+
+/* --- 底部 Footer --- */
+.vss-inspector-panel .inspector-footer {
+    flex-shrink: 0;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 16px 24px;
+    background-color: #F9FAFB;
+    border-top: 1px solid var(--insp-border-color);
+}
+
+/* 按钮样式 */
+.vss-inspector-panel .btn-ghost-danger {
+    background: transparent;
+    border: none;
+    color: var(--insp-text-secondary);
+    cursor: pointer;
+    padding: 8px 12px;
+    border-radius: var(--insp-radius-md);
+    font-size: 13px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    transition: all 0.2s;
+}
+
+.vss-inspector-panel .btn-ghost-danger:hover {
+    color: var(--insp-danger-text);
+    background-color: var(--insp-danger-bg-hover);
+}
+
+.vss-inspector-panel .footer-actions-right {
+    display: flex;
+    gap: 12px;
+}
+
+.vss-inspector-panel .btn-secondary {
+    background: transparent;
+    border: 1px solid transparent;
+    color: var(--insp-text-secondary);
+    padding: 6px 16px;
+    border-radius: var(--insp-radius-md);
+    font-size: 13px;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.vss-inspector-panel .btn-secondary:hover {
+    background-color: #f1f5f9;
+    color: var(--insp-text-primary);
+}
+
+.vss-inspector-panel .btn-primary {
+    background-color: var(--insp-primary-color);
+    color: white;
+    border: none;
+    padding: 6px 20px;
+    border-radius: var(--insp-radius-md);
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    box-shadow: 0 1px 3px 0 rgba(99, 102, 241, 0.4);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    transition: all 0.2s;
+}
+
+.vss-inspector-panel .btn-primary:hover {
+    background-color: var(--insp-primary-hover);
+    box-shadow: 0 2px 5px 0 rgba(99, 102, 241, 0.5);
+    transform: translateY(-1px);
+}
+
+/* 兼容 Legacy Inspector Header */
+.vss-inspector-panel .inspector-header {
+    flex-shrink: 0;
+    padding: 16px 20px;
+    border-bottom: 1px solid var(--insp-border-color);
+    background-color: #fff;
+}
+
+.vss-inspector-panel .inspector-title {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    margin: 0 0 12px 0;
-    font-size: 18px;
+    margin: 0 0 8px 0;
+    font-size: 16px;
     font-weight: 700;
-    letter-spacing: -0.025em;
+    color: var(--insp-text-primary);
 }
 
-.inspector-status-bar {
+.vss-inspector-panel .inspector-status-bar {
     display: flex;
     align-items: center;
     gap: 8px;
     font-size: 12px;
 }
 
-/* --- 中间 Body (滚动区) --- */
-.inspector-body {
+/* 兼容 Legacy Body */
+.vss-inspector-panel .inspector-body {
     flex: 1;
     overflow-y: auto;
-    padding: 12px;
-    background-color: var(--insp-bg-body);
-    /* 核心优化：使用 flex gap 代替子元素的 margin-bottom */
+    padding: 16px;
+    background-color: #fff;
     display: flex;
     flex-direction: column;
-    gap: 24px;
-}
-
-/* --- 表单布局 --- */
-.form-group {
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-    /* 移除 margin-bottom: 24px，由父容器 inspector-body 的 gap 统一控制 */
-}
-
-.form-row {
-    display: flex;
     gap: 16px;
-    /* 移除 margin-bottom */
 }
 
-.form-row .form-group {
-    flex: 1;
-    /* 移除 margin-bottom: 0 的覆盖代码，因为本身就没有 margin 了 */
-}
-
-.form-label {
-    font-size: 13px;
-    font-weight: 600;
-    color: var(--insp-text-secondary);
-    letter-spacing: 0.01em;
-}
-
-/* --- 输入控件 (合并样式) --- */
-.form-input,
-.form-select,
-.form-textarea {
-    width: 100%;
-    box-sizing: border-box;
-    padding: 10px 12px;
-    font-size: 14px;
-    line-height: 1.5;
-    color: var(--insp-text-primary);
-    background-color: white;
-    border: 1px solid var(--insp-border-color);
-    border-radius: var(--insp-input-radius);
-    box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
-    transition: border-color 0.15s ease-in-out, box-shadow 0.15s ease-in-out;
-}
-
-/* Hover 状态 */
-.form-input:hover,
-.form-select:hover,
-.form-textarea:hover {
-    border-color: var(--insp-input-hover); /* 使用变量 */
-}
-
-/* Focus 状态 */
-.form-input:focus,
-.form-select:focus,
-.form-textarea:focus {
-    outline: none;
-    border-color: var(--insp-primary-color);
-    box-shadow: 0 0 0 3px var(--insp-primary-focus), 0 1px 2px 0 rgba(0, 0, 0, 0.05); /* 使用变量 */
-}
-
-.form-textarea {
-    min-height: 80px;
-    resize: vertical;
-    font-family: inherit;
-}
-
-/* --- 底部操作区 --- */
-.inspector-footer {
-    flex-shrink: 0;
-    padding: 24px;
-    border-top: 1px solid var(--insp-border-color);
-    background-color: var(--insp-bg-main);
-}
-
-.inspector-btn-delete {
-    margin-top: 12px;
-}
-
-/* --- 空状态 --- */
-.inspector-empty-state {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    height: 100%;
-    padding: 24px;
-    color: var(--insp-text-secondary);
-    text-align: center;
-    user-select: none;
-    background-color: var(--insp-bg-main);
-}
-
-.inspector-empty-hint {
-    margin-top: 8px;
+/* 简单只读文本框模拟 */
+.vss-inspector-panel .readonly-box {
+    background-color: #f1f5f9;
+    color: #64748b;
     font-size: 12px;
-    /* 颜色继承父级，无需重复 */
+    padding: 8px;
+    height: 100%;
+    border: 1px dashed #e2e8f0;
+    border-radius: var(--insp-radius-md);
+    overflow-y: auto;
+    line-height: 1.5;
+    box-sizing: border-box;
 }

@@ -7,7 +7,6 @@ import SimpleTimeline from './components/SimpleTimeline';
 import Inspector from './components/Inspector';
 import { transformToTracks, transformFromTracks } from './utils/adapter';
 import { generateVTT } from './utils/vtt';
-// [核心修复] 重新引入配置定义
 import { TRACK_DEFINITIONS, canTrackDo, getTrackConfig } from './config/tracks';
 import './style.css';
 
@@ -47,7 +46,6 @@ const AnnotationWorkbench = () => {
                     message.error("数据转换失败");
                 }
             } else {
-                // [修复] Fallback 使用配置生成，不再硬编码
                 message.warning("未检测到后端数据，使用空模板");
                 const emptyTracks = Object.values(TRACK_DEFINITIONS).map(def => ({
                     id: def.id,
@@ -78,7 +76,6 @@ const AnnotationWorkbench = () => {
         return { action: null, track: null };
     }, [selectedActionId, tracks]);
 
-    // [核心修复] 动态能力检查 (替代 isComplexType)
     const currentTrackId = selectedContext.track?.id;
     const canSplit = currentTrackId && canTrackDo(currentTrackId, 'split');
     const canMerge = currentTrackId && canTrackDo(currentTrackId, 'merge');
@@ -116,9 +113,52 @@ const AnnotationWorkbench = () => {
         message.info('片段已删除');
     };
 
-    // --- [修复] 恢复基于配置的创建逻辑 ---
+    // --- [新增] 选中相邻片段 (Keyboard Navigation) ---
+    const handleSelectNeighbor = (direction) => {
+        if (!selectedActionId) return;
+
+        // 1. 找到当前所在的轨道和片段
+        let targetTrack = null;
+        let currentAction = null;
+
+        for (const track of tracks) {
+            const action = track.actions.find(a => a.id === selectedActionId);
+            if (action) {
+                targetTrack = track;
+                currentAction = action;
+                break;
+            }
+        }
+
+        if (!targetTrack || !currentAction) return;
+
+        // 2. 确保按时间排序 (处理可能的乱序数据)
+        const sortedActions = _.sortBy(targetTrack.actions, 'start');
+        const currentIndex = sortedActions.findIndex(a => a.id === currentAction.id);
+
+        // 3. 计算目标索引
+        let targetIndex = -1;
+        if (direction === 'after') { // Next (A)
+            targetIndex = currentIndex + 1;
+        } else { // Before (B)
+            targetIndex = currentIndex - 1;
+        }
+
+        // 4. 执行跳转
+        if (targetIndex >= 0 && targetIndex < sortedActions.length) {
+            const targetAction = sortedActions[targetIndex];
+
+            // 选中目标
+            setSelectedActionId(targetAction.id);
+
+            // [UX] 同时将时间轴游标跳到目标片段开始处，方便即时预览内容
+            handleSeek(targetAction.start);
+        } else {
+            message.info(direction === 'after' ? '已经是最后一个片段' : '已经是第一个片段');
+        }
+    };
+
     const handleCreateClip = (trackId, start, end) => {
-        // 检查权限
         if (!canTrackDo(trackId, 'create')) return;
 
         const newTracks = _.cloneDeep(tracks);
@@ -127,11 +167,7 @@ const AnnotationWorkbench = () => {
         if (track) {
             const trackConfig = getTrackConfig(trackId);
             const newId = `${trackId}-${Date.now()}`;
-
-            // [核心修复] 使用 factory 生成默认数据
-            const newData = trackConfig && trackConfig.factory
-                ? trackConfig.factory()
-                : { label: 'New Clip' };
+            const newData = trackConfig && trackConfig.factory ? trackConfig.factory() : { label: 'New Clip' };
 
             const newAction = {
                 id: newId,
@@ -148,7 +184,6 @@ const AnnotationWorkbench = () => {
         }
     };
 
-    // --- [修复] 恢复基于配置的拆分逻辑 ---
     const handleSplitClip = () => {
         if (!selectedActionId) return;
 
@@ -162,13 +197,10 @@ const AnnotationWorkbench = () => {
         });
 
         if (!targetAction) return;
-
-        // [核心修复] 使用 canTrackDo
         if (!canTrackDo(targetTrack.id, 'split')) {
             message.warning('该轨道不支持拆分操作');
             return;
         }
-
         if (currentTime <= targetAction.start + 0.1 || currentTime >= targetAction.end - 0.1) {
             message.warning('游标未在片段中间，无法拆分');
             return;
@@ -195,7 +227,6 @@ const AnnotationWorkbench = () => {
         message.success('拆分成功');
     };
 
-    // --- [修复] 恢复基于配置的合并逻辑 ---
     const handleMergeClip = () => {
         if (!selectedActionId) return;
 
@@ -211,8 +242,6 @@ const AnnotationWorkbench = () => {
         }
 
         if (!currentAction) return;
-
-        // [核心修复] 使用 canTrackDo
         if (!canTrackDo(track.id, 'merge')) {
             message.warning('该轨道不支持合并操作');
             return;
@@ -228,14 +257,12 @@ const AnnotationWorkbench = () => {
 
         const nextAction = track.actions[currentIndex + 1];
 
-        // 角色校验
         if (track.id === 'dialogues' && currentAction.data.speaker !== nextAction.data.speaker) {
             message.error(`角色不一致，禁止合并`);
             return;
         }
 
         currentAction.end = nextAction.end;
-        // 文本拼接 (Dialogues / Captions)
         if (['dialogues', 'captions'].includes(track.id)) {
             currentAction.data.text = `${currentAction.data.text} ${nextAction.data.text}`;
         }
@@ -247,7 +274,6 @@ const AnnotationWorkbench = () => {
 
     const togglePlay = () => setPlaying(!playing);
 
-    // --- 保存逻辑 ---
     const handleSave = async () => {
         if (!originalMeta) {
             message.error("原始数据丢失，无法保存");
@@ -259,13 +285,7 @@ const AnnotationWorkbench = () => {
             const payload = transformFromTracks(tracks, originalMeta);
             console.log("[Workbench] Saving Payload:", payload);
 
-            // [核心修复] 获取 CSRF Token
-            // 优先从 window.CONTEXT 获取 (我们在 workbench.html 里注入了)
-            // 如果没有，再尝试从 DOM 获取
             const csrfToken = window.CONTEXT?.csrfToken || document.querySelector('[name=csrfmiddlewaretoken]')?.value || '';
-
-            // [核心修复] 使用后端注入的专用 API 地址
-            // 之前的 window.location.href 会请求到 HTML 页面，导致 "Unexpected token <" 错误
             const saveUrl = window.CONTEXT?.saveEndpoint;
 
             if (!saveUrl) {
@@ -282,7 +302,6 @@ const AnnotationWorkbench = () => {
                 body: JSON.stringify(payload)
             });
 
-            // 检查 HTTP 状态码，防止 404/500 返回 HTML 导致的解析错误
             if (!response.ok) {
                 const text = await response.text();
                 throw new Error(`Server Error (${response.status}): ${text.substring(0, 100)}...`);
@@ -292,7 +311,6 @@ const AnnotationWorkbench = () => {
 
             if (resData.status === 'success') {
                 message.success('保存成功');
-                // 可选：更新本地 originalMeta，防止重复保存
                 setOriginalMeta(payload);
             } else {
                 message.error(`保存失败: ${resData.message || '未知错误'}`);
@@ -306,22 +324,19 @@ const AnnotationWorkbench = () => {
         }
     };
 
-    // [新增] 处理返回逻辑
     const handleGoBack = () => {
-        // 优先使用后端注入的精确路径
         const returnUrl = window.CONTEXT?.returnUrl;
-
         if (returnUrl) {
             window.location.href = returnUrl;
         } else {
-            // 兜底：如果没有路径，才尝试浏览器回退
             window.history.back();
         }
     };
 
-    // --- 键盘快捷键 ---
+    // --- 键盘快捷键监听 ---
     useEffect(() => {
         const handleKeyDown = (e) => {
+            // 输入状态下禁用快捷键
             if (['INPUT', 'TEXTAREA'].includes(document.activeElement.tagName)) return;
 
             switch(e.code) {
@@ -344,22 +359,31 @@ const AnnotationWorkbench = () => {
                     e.preventDefault();
                     handleMergeClip();
                     break;
+                // [新增] A键: 选中下一个 (After)
+                case 'KeyA':
+                    e.preventDefault();
+                    handleSelectNeighbor('after');
+                    break;
+                // [新增] B键: 选中上一个 (Before)
+                case 'KeyB':
+                    e.preventDefault();
+                    handleSelectNeighbor('before');
+                    break;
             }
         };
 
         window.addEventListener('keydown', handleKeyDown);
         return () => window.removeEventListener('keydown', handleKeyDown);
-    }, [selectedActionId, currentTime, tracks]);
+    }, [selectedActionId, currentTime, tracks]); // 依赖项包含 selectedActionId 确保能找到当前位置
 
     return (
         <div className="wb-container">
             <header className="wb-header">
-                {/* 左侧：返回与标题 */}
                 <div className="wb-header-left">
                     <Button
                         icon={<ArrowLeftOutlined />}
                         type="text"
-                        onClick={handleGoBack} // 假设逻辑代码里有这个
+                        onClick={handleGoBack}
                         title="返回项目列表"
                     />
                     <div>
@@ -368,14 +392,13 @@ const AnnotationWorkbench = () => {
                     </div>
                 </div>
 
-                {/* 中间：播放控制 */}
                 <div className="wb-player-controls">
                     <div className="wb-control-group">
                         <Button
                             type="text"
                             shape="circle"
                             icon={playing ? <PauseCircleOutlined style={{ fontSize: 24, color: '#9333ea' }}/> : <PlayCircleOutlined style={{ fontSize: 24 }}/>}
-                            onClick={togglePlay} // 假设逻辑代码里有这个
+                            onClick={togglePlay}
                         />
 
                         <AntTooltip title={showSubtitle ? "隐藏原片字幕" : "显示原片字幕 (CC)"}>
@@ -384,7 +407,7 @@ const AnnotationWorkbench = () => {
                                 shape="circle"
                                 size="small"
                                 icon={<FileTextOutlined style={{ fontSize: 16 }} />}
-                                onClick={() => setShowSubtitle(!showSubtitle)} // 假设逻辑代码里有这个
+                                onClick={() => setShowSubtitle(!showSubtitle)}
                                 style={showSubtitle ? { backgroundColor: '#9333ea' } : { color: '#6b7280' }}
                             />
                         </AntTooltip>
@@ -395,7 +418,6 @@ const AnnotationWorkbench = () => {
                     </div>
                 </div>
 
-                {/* 右侧：保存提交 */}
                 <Space size="middle">
                     <span className="wb-save-hint">
                         暂存后请记得点击此处提交 👉
@@ -404,8 +426,8 @@ const AnnotationWorkbench = () => {
                     <Button
                         type="primary"
                         icon={<SaveOutlined />}
-                        onClick={handleSave} // 假设逻辑代码里有这个
-                        loading={saving} // 假设逻辑代码里有这个
+                        onClick={handleSave}
+                        loading={saving}
                         title="将当前所有暂存的修改写入后端存储"
                     >
                         提交本次标注成果
@@ -427,7 +449,6 @@ const AnnotationWorkbench = () => {
                             subtitleUrl={subtitleUrl}
                         />
                     </div>
-                    {/* 这里的 .wb-inspector-area 样式已在 CSS 中去除了多余 padding */}
                     <div className="wb-inspector-area">
                         <Inspector
                             action={selectedContext?.action}
@@ -450,7 +471,7 @@ const AnnotationWorkbench = () => {
                         </div>
 
                         <span className="wb-toolbar-hint">
-                            操作: 轨道划词创建 | 拖拽调整 | S键拆分 | M键合并
+                            快捷键: [A] 下一个片段 | [B] 上一个片段 | [S] 拆分 | [M] 合并
                         </span>
 
                         <div className="wb-toolbar-slider">

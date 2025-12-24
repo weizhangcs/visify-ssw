@@ -1,23 +1,13 @@
 {
   "scene_types": [
-    { "value": "Dialogue_Heavy", "label": "对话驱动" },
-    { "value": "Action_Driven", "label": "动作驱动" },
-    { "value": "Internal_Monologue", "label": "内心独白" },
-    { "value": "Visual_Storytelling", "label": "视觉叙事" }
+    { "value": "dialogue", "label": "对话场 (Dialogue)" },
+    { "value": "action", "label": "动作场 (Action)" },
+    { "value": "montage", "label": "蒙太奇 (Montage)" },
+    { "value": "establishing", "label": "建立场 (Establishing)" },
+    { "value": "emotional", "label": "情绪场 (Emotional)" },
+    { "value": "unknown", "label": "未知 (Unknown)" }
   ],
   "scene_moods": [
-    { "value": "Romantic", "label": "浪漫 (Romantic)" },
-    { "value": "Warm", "label": "温馨 (Warm)" },
-    { "value": "Joyful", "label": "喜悦 (Joyful)" },
-    { "value": "Calm", "label": "平静 (Calm)" },
-    { "value": "Tense", "label": "紧张 (Tense)" },
-    { "value": "Suspenseful", "label": "悬疑 (Suspenseful)" },
-    { "value": "Sad", "label": "悲伤 (Sad)" },
-    { "value": "Angry", "label": "愤怒 (Angry)" },
-    { "value": "Confrontational", "label": "冲突 (Confrontational)" },
-    { "value": "Fearful", "label": "恐惧 (Fearful)" },
-    { "value": "Oppressive", "label": "压抑 (Oppressive)" },
-    { "value": "Eerie", "label": "诡异 (Eerie)" }
   ],
   "highlight_types": [
     { "value": "Action", "label": "动作片段" },
@@ -38,5 +28,13 @@
     { "value": "Healing", "label": "治愈 (Healing)" },
     { "value": "Touching", "label": "感动 (Touching)" },
     { "value": "Tense", "label": "紧张 (Tense)" }
+  ],
+  "caption_categories": [
+    { "value": "title_notice", "label": "标题标识" },
+    { "value": "location_notice", "label": "地点标识" },
+    { "value": "timeline_notice", "label": "时间标识" },
+    { "value": "narrative_notice", "label": "关键叙事" },
+    { "value": "mix", "label": "混合信息" },
+    { "value": "other", "label": "其他" }
   ]
 }

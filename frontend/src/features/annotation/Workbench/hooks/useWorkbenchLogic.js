@@ -2,11 +2,6 @@ import { useState, useEffect, useMemo } from 'react';
 import { message } from 'antd';
 import _ from 'lodash';
 import { transformToTracks, transformFromTracks } from '../utils/adapter';
-import { parseSRT } from '../utils/parsers';
-
-// 配置常量
-const TEST_VIDEO_URL = "http://localhost:9999/media/transcoding_outputs/5124d170-c299-4d58-8447-abdaac2af5aa/158.mp4";
-const TEST_SRT_URL = "http://localhost:9999/media/transcoding_outputs/5124d170-c299-4d58-8447-abdaac2af5aa/158.srt";
 
 export const useWorkbenchLogic = () => {
     const [tracks, setTracks] = useState([]);
@@ -14,7 +9,7 @@ export const useWorkbenchLogic = () => {
     const [saving, setSaving] = useState(false);
     const [selectedActionId, setSelectedActionId] = useState(null);
     const [originalMeta, setOriginalMeta] = useState(null);
-    const [videoUrl, setVideoUrl] = useState(TEST_VIDEO_URL);
+    //const [videoUrl, setVideoUrl] = useState(TEST_VIDEO_URL);
 
     // 1. 初始化数据
     useEffect(() => {
@@ -22,37 +17,17 @@ export const useWorkbenchLogic = () => {
             setLoading(true);
             const serverData = window.SERVER_DATA || null;
 
-            if (serverData) {
-                console.log("[Workbench] Init Data:", serverData);
-                setOriginalMeta(serverData);
-                try {
-                    const convertedTracks = transformToTracks(serverData);
-                    setTracks(convertedTracks);
-                    if (serverData.source_path && !serverData.source_path.includes('v2_demo.mp4')) {
-                        setVideoUrl(serverData.source_path);
-                    }
-                } catch (e) {
-                    console.error("Adapter Error:", e);
-                    message.error("数据转换失败");
+            console.log("[Workbench] Init Data:", serverData);
+            setOriginalMeta(serverData);
+            try {
+                const convertedTracks = transformToTracks(serverData);
+                setTracks(convertedTracks);
+                if (serverData.source_path && !serverData.source_path.includes('v2_demo.mp4')) {
+                    setVideoUrl(serverData.source_path);
                 }
-            } else {
-                // Fallback 用于本地开发
-                message.warning("无后端数据，使用本地测试模式");
-                try {
-                    const resp = await fetch(TEST_SRT_URL);
-                    const text = resp.ok ? await resp.text() : "";
-                    const subtitles = parseSRT(text);
-                    setTracks([
-                        { id: 'scenes', name: 'SCENES', color: '#a855f7', actions: [] },
-                        { id: 'highlights', name: 'HIGHLIGHTS', color: '#eab308', actions: [] },
-                        { id: 'dialogues', name: 'DIALOG', color: '#3b82f6', actions: [] }, // 这里的 actions 实际上你会填入 subtitles
-
-                        // [修复] Fallback 这里的名字也要改
-                        { id: 'captions', name: 'CAPTION', color: '#10b981', actions: [] }
-                    ]);
-                } catch (e) {
-                    console.error(e);
-                }
+            } catch (e) {
+                console.error("Adapter Error:", e);
+                message.error("数据转换失败");
             }
             setLoading(false);
         };
@@ -118,9 +93,7 @@ export const useWorkbenchLogic = () => {
 
     const splitClip = (currentTime) => {
         if (!selectedActionId || isComplexType) return;
-        // ... (原 split 逻辑，为了节省篇幅，核心逻辑直接复用原 index.jsx 里的内容，此处略作精简)
-        // 实际使用时请把原 split 逻辑搬过来，只替换状态变量名
-        // 下面是核心逻辑搬运：
+
         let targetTrack, targetAction, tIdx, aIdx;
         tracks.forEach((t, i) => t.actions.forEach((a, j) => {
             if (a.id === selectedActionId) { targetTrack=t; targetAction=a; tIdx=i; aIdx=j; }

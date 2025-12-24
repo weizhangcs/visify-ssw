@@ -6,7 +6,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Annotation Workbench - Job #{{ job_id }}</title>
 
-    {# [核心修正] 引用 Vite 构建后的 CSS (对应 vite.config.js 中的 output 规则) #}
+    {# [核心] 引用 Vite 构建后的 CSS #}
     <link rel="stylesheet" href="{% static 'css/bundles/annotation-workbench.css' %}">
 
     <style>
@@ -14,35 +14,38 @@
     </style>
 </head>
 <body>
-    {# [核心] 生成 CSRF Token 供前端提取 (如果前端逻辑是从 DOM 读取的话) #}
     {% csrf_token %}
 
-    {# [核心] 数据注入区 #}
-    <script>
-        // 1. 注入业务数据 (Timeline Tracks, Dialogues, etc.)
-        window.SERVER_DATA = {{ server_data_json|safe }};
+    {# [核心修复] 使用 json_script 将数据输出到 DOM 元素中 #}
+    {# Django 会自动处理 HTML 转义，防止 XSS 和 SyntaxError #}
+    {{ server_data|json_script:"server-data" }}
+    {{ character_list|json_script:"character-list" }}
 
-        // 2. 注入环境上下文 (URLs, IDs, API Endpoints)
-        // 确保前端可以直接拿到这些关键变量，无需再次拼接字符串
+    <script>
+        // 1. 从 DOM 元素读取 JSON 内容并解析
+        const serverData = JSON.parse(document.getElementById('server-data').textContent);
+        const characterList = JSON.parse(document.getElementById('character-list').textContent);
+
+        // 2. 注入全局变量
+        window.SERVER_DATA = serverData;
+
         window.CONTEXT = {
             jobId: "{{ job_id }}",
             projectId: "{{ project_id }}",
-            mediaUrl: "{{ media_url }}",         // Proxy Video URL
-            waveformUrl: "{{ waveform_url|default:'' }}", // Waveform JSON URL
+            mediaUrl: "{{ media_url }}",
+            waveformUrl: "{{ waveform_url|default:'' }}",
             returnUrl: "{{ return_url }}",
 
-            // 获取 Django CSRF Token (优先从 cookie 或 input 获取，这里提供备用)
-            csrfToken: document.querySelector('[name=csrfmiddlewaretoken]')?.value || '',
+            // 注入解析后的 List
+            characterList: characterList,
 
-            // 保存接口
+            csrfToken: document.querySelector('[name=csrfmiddlewaretoken]')?.value || '',
             saveEndpoint: "{% url 'workflow:annotation:annotation_save' job_id %}"
         };
     </script>
 
-    {# [核心修正] React 挂载点 (对应 src/entries/annotation_workbench.jsx) #}
     <div id="react-root" style="height: 100vh; width: 100vw;"></div>
 
-    {# [核心修正] 引用 Vite 构建后的 JS (对应 vite.config.js 中的 input key) #}
     <script type="module" src="{% static 'js/bundles/annotation-workbench.js' %}"></script>
 </body>
 </html>

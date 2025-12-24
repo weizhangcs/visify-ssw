@@ -6,16 +6,7 @@ import re
 import uuid
 from typing import Dict, List, Union
 
-from ..schemas import (
-    DataOrigin,
-    DialogueContent,
-    DialogueItem,
-    ItemContext,
-    SceneContent,
-    SceneItem,
-    SceneMood,
-    SceneType,
-)
+from ..schemas import DataOrigin, DialogueContent, DialogueItem, ItemContext, SceneContent, SceneItem, SceneType
 
 logger = logging.getLogger(__name__)
 
@@ -248,45 +239,39 @@ def parse_scene_json_content(data: Union[str, Dict]) -> List[SceneItem]:
                 end_time = float(e_slice.get("end_time", 0.0))
 
             # -------------------------------------------------
-            # B. 字段映射 (Rich Data Mapping)
+            # B. 字段映射 (Data Mapping) - [全量修正]
             # -------------------------------------------------
 
-            # 1. 标题 (Label)
-            # 优先使用 narrative_action (核心事件)，兜底使用 index
-            label_text = scene_def.get("narrative_action")
-            if not label_text:
-                label_text = f"Scene {scene_def.get('index')}"
+            # 1. 核心叙事 (Narrative Action)
+            # 必须存在，如果没有则给一个默认值
+            narrative_action = scene_def.get("narrative_action", "")
 
-            # 2. 枚举映射 (Type & Mood)
-            safe_type = _map_enum_value(SceneType, scene_def.get("scene_type"))
+            # 2. Label (显示标题)
+            # 逻辑：Label 默认等于 narrative_action。
+            # 前端 UI 会负责截断显示，但存储时我们存全量或由用户修改。
+            # 如果上游没给 narrative_action，则兜底为 "Scene X"
+            label_text = narrative_action if narrative_action else f"Scene {scene_def.get('index')}"
 
-            # Mood 映射策略：
-            # Cloud 返回的是 tags 列表。
-            # 我们保留完整列表到 tags 字段。
-            # 同时也尝试提取第一个能匹配到 Local Enum 的 tag 作为 'mood' (供旧 UI 兼容)。
-            cloud_tags = scene_def.get("visual_mood_tags", [])
-            safe_mood = None
-            if cloud_tags and isinstance(cloud_tags, list):
-                for tag in cloud_tags:
-                    found = _map_enum_value(SceneMood, tag)
-                    if found:
-                        safe_mood = found
-                        break
+            # 3. 枚举映射 (Type)
+            # 使用 _map_enum_value 安全转换
+            safe_type = _map_enum_value(SceneType, scene_def.get("scene_type")) or SceneType.UNKNOWN
 
-            # 3. 构建 SceneContent
-            # 此时我们假设 schemas.py 的 SceneContent 已经升级，包含下列字段
+            # 4. Tags 映射 (直接透传列表)
+            visual_mood_tags = scene_def.get("visual_mood_tags", [])
+            if not isinstance(visual_mood_tags, list):
+                visual_mood_tags = []
+
+            # 5. 构建 SceneContent
             scene_content = SceneContent(
-                label=label_text,
+                narrative_action=narrative_action,  # [New]
+                label=label_text,  # [Mapped]
                 location=scene_def.get("primary_location", "Unknown"),
-                scene_type=safe_type,
-                # [Rich Data Fields]
+                scene_type=safe_type,  # [Aligned Enum]
+                visual_mood_tags=visual_mood_tags,  # [Renamed]
                 camera_logic=scene_def.get("camera_logic"),
                 reason=scene_def.get("reason"),
                 character_dynamics=scene_def.get("character_dynamics"),
-                tags=cloud_tags,  # 完整 List[str]
-                # 兼容旧字段
-                mood=safe_mood,
-                description="",  # 不再需要拼接长文本，可留空
+                description="",  # 留空，这是给用户写的 Manual Notes
             )
 
             # 4. 构建上下文

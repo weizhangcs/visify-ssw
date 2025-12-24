@@ -6,40 +6,22 @@ from django.utils.translation import gettext_lazy as _
 from pydantic import BaseModel, Field
 
 # =============================================================================
-# 1. 核心枚举 (Core Enums) - i18n 增强版
+# 1. 核心枚举 (Core Enums) - 对齐上游 & i18n
 # =============================================================================
 
 
-class SceneMood(models.TextChoices):
-    """
-    [场景氛围]
-    Value (存储值) = "Calm"
-    Label (显示名) = "平静" (支持 i18n)
-    """
-
-    CALM = "Calm", _("平静")
-    TENSE = "Tense", _("紧张")
-    ROMANTIC = "Romantic", _("浪漫")
-    JOYFUL = "Joyful", _("喜悦")
-    SAD = "Sad", _("悲伤")
-    MYSTERIOUS = "Mysterious", _("悬疑/神秘")
-    ANGRY = "Angry", _("愤怒")
-    CONFRONTATIONAL = "Confrontational", _("冲突")
-    FEARFUL = "Fearful", _("恐惧")
-    OPPRESSIVE = "Oppressive", _("压抑")
-    EERIE = "Eerie", _("诡异")
-    WARM = "Warm", _("温馨")
-
-
 class SceneType(models.TextChoices):
-    """[场景类型]"""
+    """
+    [V5.4 修正] 场景类型
+    严格对齐 Cloud 端 ScenePreAnnotator 的 Enum 定义
+    """
 
-    DIALOGUE_HEAVY = "Dialogue_Heavy", _("对话驱动")
-    ACTION_DRIVEN = "Action_Driven", _("动作驱动")
-    INTERNAL_MONOLOGUE = "Internal_Monologue", _("内心独白")
-    VISUAL_STORYTELLING = "Visual_Storytelling", _("视觉叙事")
-    TRANSITION = "Transition", _("过场")
-    ESTABLISHING = "Establishing", _("铺垫/空镜")
+    DIALOGUE = "dialogue", _("对话场")
+    ACTION = "action", _("动作场")
+    MONTAGE = "montage", _("蒙太奇")
+    ESTABLISHING = "establishing", _("建立场")
+    EMOTIONAL = "emotional", _("情绪场")
+    UNKNOWN = "unknown", _("未知")
 
 
 class HighlightType(models.TextChoices):
@@ -79,7 +61,7 @@ class DataOrigin(models.TextChoices):
 
 
 # ==========================================
-# 2. 上下文组件 (Context Components) - 保持不变
+# 2. 上下文组件 (Context Components)
 # ==========================================
 class AiMetadata(BaseModel):
     confidence: float = Field(default=1.0, ge=0.0, le=1.0)
@@ -100,7 +82,7 @@ class ItemContext(BaseModel):
 
 
 # ==========================================
-# 3. 业务实体 (Business Content) - 保持不变
+# 3. 业务实体 (Business Content)
 # ==========================================
 class DialogueContent(BaseModel):
     text: str
@@ -121,32 +103,33 @@ class HighlightContent(BaseModel):
 
 class SceneContent(BaseModel):
     """
-    [V5.3 升级] 场景业务载体
-    完全对齐 Cloud 端 ScenePreAnnotatorResult 的丰富度
+    [V5.4 升级] 场景业务载体 - 严格对齐 Cloud Schema
     """
 
-    # 1. 核心标识
-    label: str = Field(..., description="场景标题/简述，对应 narrative_action")
+    # 1. 核心叙事 (Identity)
+    # [核心修正] 透传 narrative_action，它是场景的核心定义
+    narrative_action: str = Field(..., description="叙事动作/核心事件")
+
+    # Label 是 UI 显示用的短标题，默认由 Parser 从 narrative_action 截取或填充
+    label: str = Field(..., description="显示标题")
 
     # 2. 基础属性
     location: Optional[str] = Field(None, description="主要地点")
-    scene_type: Optional[SceneType] = Field(None, description="功能类型")
 
-    # 3. [新增] 导演/剪辑逻辑
+    # [核心修正] 使用新定义的 SceneType，并设置默认值为 UNKNOWN (解决 AttributeError)
+    scene_type: Optional[SceneType] = Field(default=SceneType.UNKNOWN, description="功能类型")
+
+    # 3. 视觉与情绪
+    # [核心修正] 更名为 visual_mood_tags，移除旧的 mood 字段
+    visual_mood_tags: List[str] = Field(default_factory=list, description="视觉氛围标签")
+
+    # 4. 导演/剪辑逻辑
     camera_logic: Optional[str] = Field(None, description="运镜/剪辑逻辑 (e.g., Static, Fast cuts)")
-    reason: Optional[str] = Field(None, description="AI 分组/切分的理由 (Segmentation Reason)")
-
-    # 4. [新增] 视觉与情绪
-    # 升级：不再只存单个 mood，而是存储完整的标签列表
-    tags: List[str] = Field(default_factory=list, description="视觉氛围标签 (visual_mood_tags)")
-    # 兼容：仍保留 mood 字段作为 '主导情绪'，供旧版 UI 兼容显示
-    mood: Optional[SceneMood] = None
-
-    # 5. 角色关系
+    reason: Optional[str] = Field(None, description="AI 分组/切分的理由")
     character_dynamics: Optional[str] = Field(None, description="角色张力/关系")
 
-    # 6. 其他
-    description: str = Field("", description="补充描述")
+    # 5. 人工备注
+    description: str = Field("", description="人工备注 (Manual Notes)")
     keyframe_url: Optional[str] = None
 
 
@@ -193,37 +176,30 @@ class MediaAnnotation(BaseModel):
     对应单个 Media 的全量工程文件 (l1_output_file)。
     """
 
-    # 媒资关联
     media_id: str
     file_name: str
     source_path: str
     sequence_number: int
     waveform_url: Optional[str] = None
 
-    # 核心数据 (四条轨道)
     scenes: List[SceneItem] = []
     dialogues: List[DialogueItem] = []
     captions: List[CaptionItem] = []
     highlights: List[HighlightItem] = []
 
-    # 元数据
-    duration: float = 0.0  # 物理文件时长
+    duration: float = 0.0
     updated_at: datetime = Field(default_factory=datetime.now)
-    version: str = "2.0"  # Schema 版本
+    version: str = "2.1"  # 升级版本号
 
     def get_clean_business_data(self) -> Dict[str, Any]:
         """
         [核心方法] 提取纯净业务数据 (去除 Context)
-        供 Blueprint 生成使用
         """
 
         def clean_list(items: List[Any]) -> List[Dict[str, Any]]:
             result = []
             for item in items:
-                # 1. 提取时间轴
                 base = {"start": item.start, "end": item.end}
-                # 2. 提取内容 (展平)
-                # exclude_none=True 会过滤掉没填的字段
                 content_dict = item.content.model_dump(exclude_none=True)
                 result.append({**base, **content_dict})
             return result
@@ -239,43 +215,31 @@ class MediaAnnotation(BaseModel):
 class ProjectAnnotation(BaseModel):
     """
     [项目生产集合]
-    对应整个 Project 的全量工程状态。
-    这是 Edge 内部视角的“项目全貌”。
     """
 
     project_id: str
     project_name: str
-
-    # 全局角色表 (含工程状态，如是否人工确认过该角色存在)
     character_list: List[str] = Field(default_factory=list)
-
-    # 包含所有原子单元
     annotations: Dict[str, MediaAnnotation] = {}
 
 
 # ==========================================
 # 6. 下游消费模型 (Consumer Models)
-# 消费侧：VSS-Cloud 接收 / Inference 输入
 # ==========================================
 
 
 class Chapter(BaseModel):
     """
     [章节] (Consumer Unit)
-    对应 MediaAnnotation 的清洗版。
-    只包含业务内容 (start, end, content)，剔除了 context。
     """
 
     id: str = Field(..., description="章节ID (MediaID)")
-    sequence_number: int = Field(..., description="叙事顺序，用于 VSS Cloud 排序和逻辑处理")
+    sequence_number: int = Field(..., description="叙事顺序")
     name: str = Field(..., description="章节名称")
     source_file: str = Field(..., description="关联视频路径")
     duration: float
 
-    # 注意：这里的结构被扁平化了，直接暴露 Content 字段，或者复用 Content 对象
-    # 为了下游使用方便，通常我们会把 Content 里的字段展开，或者保留 Content 结构
-    # 这里为了保持与旧版 Blueprint 的“业务纯净度”，我们定义为：
-    scenes: List[Dict[str, Any]]  # 这里的 Dict 是清洗后的 Scene (start, end, ...content fields)
+    scenes: List[Dict[str, Any]]
     dialogues: List[Dict[str, Any]]
     captions: List[Dict[str, Any]]
     highlights: List[Dict[str, Any]]
@@ -284,16 +248,10 @@ class Chapter(BaseModel):
 class Blueprint(BaseModel):
     """
     [蓝图] (Delivery Artifact)
-    对应 ProjectAnnotation 的清洗版。
-    最终发给 Cloud 的 JSON。
     """
 
     project_id: str
     asset_id: str
     project_name: str
-
-    # 纯净的角色列表
     global_character_list: List[str] = Field(default_factory=list)
-
-    # 章节集合
     chapters: Dict[str, Chapter] = {}

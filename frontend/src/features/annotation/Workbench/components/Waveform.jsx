@@ -1,12 +1,11 @@
 import React, { useEffect, useRef, useState } from 'react';
 import WaveSurfer from 'wavesurfer.js';
 
-const Waveform = ({ url, scale, height = 60 }) => {
+const Waveform = ({ url, waveformUrl, scale, height = 60 }) => {
     const containerRef = useRef(null);
     const wavesurfer = useRef(null);
-    const [isReady, setIsReady] = useState(false); // [新增] 就绪状态
+    const [isReady, setIsReady] = useState(false);
 
-    // 1. 初始化 WaveSurfer
     useEffect(() => {
         if (!containerRef.current || !url) return;
 
@@ -22,58 +21,78 @@ const Waveform = ({ url, scale, height = 60 }) => {
             cursorWidth: 0,
             height: height,
             normalize: true,
-            minPxPerSec: scale,   // 初始缩放
+            minPxPerSec: scale,
             fillParent: true,
             interact: false,
             scrollbar: false,
             hideScrollbar: true,
-            // [新增] 尝试使用 MediaElement 模式可能更稳定，但 Web Audio 性能更好
-            // backend: 'WebAudio',
+            // [关键 1] 显式指定 backend 为 MediaElement，兼容性更好
+            backend: 'MediaElement',
         });
 
-        // [新增] 监听加载完成事件
-        ws.on('ready', () => {
-            console.log('[Waveform] Ready');
-            setIsReady(true);
-        });
+        // 绑定事件
+        ws.on('ready', () => setIsReady(true));
+        ws.on('error', (e) => console.warn('[Waveform] Warn:', e));
 
-        ws.on('error', (e) => {
-            console.warn('[Waveform] Load Error:', e);
-        });
+        // [关键 2] 核心加载逻辑分支
+        const initWaveform = async () => {
+            // 策略 A: 如果有预生成的波形数据 (JSON)，优先使用
+            if (waveformUrl) {
+                try {
+                    const response = await fetch(waveformUrl);
+                    if (!response.ok) throw new Error("Failed to fetch waveform json");
 
-        // 加载音频
-        try {
-            ws.load(url);
-        } catch (e) {
-            console.error(e);
-        }
+                    const json = await response.json();
 
+                    // Python 脚本生成的 JSON 结构通常是: { data: [...] } (单声道)
+                    // WaveSurfer load 方法的第二个参数是 peaks
+                    // peaks 格式: Array<Float> (单声道) 或 Array<Array<Float>> (立体声)
+                    const peaks = json.data;
+
+                    if (peaks && peaks.length > 0) {
+                        // [核心技巧] 传入 peaks 数据
+                        // 即使 url 是 m3u8，只要提供了 peaks，WaveSurfer 就会立即渲染图形，
+                        // 而不会阻塞等待音频解码。即便底层 audio 加载失败，波形依然可见。
+                        ws.load(url, [peaks]);
+                        console.log('[Waveform] Loaded using JSON peaks');
+                        return;
+                    }
+                } catch (e) {
+                    console.error("[Waveform] JSON Load Failed, falling back to decode:", e);
+                }
+            }
+
+            // 策略 B: 没有 JSON 或加载失败，尝试直接解码 (如果 url 是 HLS，这里会失败)
+            try {
+                ws.load(url);
+            } catch (e) {
+                console.error("[Waveform] Direct Load Failed:", e);
+            }
+        };
+
+        initWaveform();
         wavesurfer.current = ws;
 
-        // 清理
         return () => {
             if (wavesurfer.current) {
                 try {
                     wavesurfer.current.destroy();
-                } catch (e) {
-                    // 忽略销毁时的潜在报错
-                }
+                } catch (e) {}
                 wavesurfer.current = null;
             }
         };
-    }, [url]); // 仅当 URL 变化时重新初始化
+    }, [url, waveformUrl]); // [修正] 依赖列表中加入 waveformUrl
 
-    // 2. 响应缩放 (Zoom) - [核心修复]
+    // 响应缩放
     useEffect(() => {
-        // 只有当实例存在 且 音频已就绪 时才执行 Zoom
         if (wavesurfer.current && isReady && scale) {
             try {
                 wavesurfer.current.zoom(scale);
             } catch (e) {
-                console.warn('[Waveform] Zoom skipped:', e.message);
+                // Ignore
             }
         }
-    }, [scale, isReady]); // 依赖 isReady
+    }, [scale, isReady]);
 
     return (
         <div
