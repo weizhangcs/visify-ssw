@@ -14,16 +14,21 @@
   "dependencies": {
     "@ant-design/icons": "^6.1.0",
     "@cloudgpt/timeline-editor": "^1.0.0",
+    "@xyflow/react": "^12.10.0",
     "antd": "^6.0.1",
+    "dagre": "^0.8.5",
     "dayjs": "^1.11.19",
+    "hls.js": "^1.6.15",
     "lodash": "^4.17.21",
     "react": "^19.2.1",
     "react-dom": "^19.2.1",
-    "react-player": "^3.4.0",
+    "uuid": "^13.0.0",
     "wavesurfer-react": "^3.0.4",
     "wavesurfer.js": "^7.12.1"
   },
   "devDependencies": {
+    "@types/dagre": "^0.7.53",
+    "@types/uuid": "^10.0.0",
     "@vitejs/plugin-react": "^5.1.1",
     "autoprefixer": "^10.4.22",
     "postcss": "^8.5.6",
