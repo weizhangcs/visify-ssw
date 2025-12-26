@@ -116,7 +116,6 @@ def annotation_workbench_entry(request, job_id):
     return render(request, "admin/workflow/project/annotation/workbench.html", context)
 
 
-# ... (后续 View 函数保持不变，与原文件一致) ...
 @require_POST
 def annotation_save_api(request, job_id):
     try:

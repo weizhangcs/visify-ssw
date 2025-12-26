@@ -5,6 +5,7 @@ import logging
 
 from django.core.files.base import ContentFile
 from django.db import models
+from django.utils.translation import gettext_lazy as _
 
 from ..common.baseProject import BaseProject
 
@@ -78,6 +79,12 @@ class AnnotationProject(BaseProject):
     )
     final_blueprint_file_backup = models.FileField(
         upload_to=get_blueprint_upload_path, blank=True, null=True, verbose_name="生产消费蓝图 (Backup)"
+    )
+
+    # [新增] 编排图谱存储
+    # 这是连接 "物理审订" 与 "逻辑叙事" 的中间态数据
+    orchestration_graph = models.JSONField(
+        blank=True, null=True, verbose_name=_("编排图谱 (Orchestration Graph)"), help_text=_("存储用户在编排工作台保存的逻辑结构数据。")
     )
 
     # =========================================================================

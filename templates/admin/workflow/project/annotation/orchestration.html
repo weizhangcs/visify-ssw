@@ -1,0 +1,27 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="zh-hans">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Scene Orchestration - {{ project_name }}</title>
+
+    {# [修正] 必须显式引入 CSS，否则 React Flow 节点会垂直堆叠 #}
+    <link rel="stylesheet" href="{% static 'css/bundles/scene-orchestration.css' %}">
+
+    <style>
+        body { margin: 0; padding: 0; overflow: hidden; background-color: #f3f4f6; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial; }
+        #react-root-orchestration { height: 100vh; width: 100vw; }
+    </style>
+</head>
+<body>
+    {{ server_context|json_script:"server-context" }}
+    <script>
+        const contextData = JSON.parse(document.getElementById('server-context').textContent);
+        window.SERVER_CONTEXT = contextData;
+    </script>
+
+    <div id="react-root-orchestration"></div>
+    <script type="module" src="{% static 'js/bundles/scene-orchestration.js' %}"></script>
+</body>
+</html>

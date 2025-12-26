@@ -1,14 +1,11 @@
+# apps/workflow/annotation/services/annotation_service.py
 import json
 import logging
 from datetime import datetime
 
-# [新增] 引入上游业务模型
-from apps.workflow.character_annotation.models import CharacterAnnotationJob
-from apps.workflow.scene_annotation.models import SceneAnnotationJob
-
+from ...character_annotation.models import CharacterAnnotationJob
 from ...common.baseJob import BaseJob
-
-# 引入 Schema 定义
+from ...scene_annotation.models import SceneAnnotationJob
 from ..schemas import MediaAnnotation
 from .parsers import parse_ass_content, parse_scene_json_content
 

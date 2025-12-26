@@ -21,6 +21,8 @@ export default defineConfig({
                 'inference-facts': path.resolve(__dirname, 'src/entries/inference_facts.jsx'),
                 'inference-rag': path.resolve(__dirname, 'src/entries/inference_rag.jsx'),
                 'annotation-workbench': path.resolve(__dirname, 'src/entries/annotation_workbench.jsx'),
+                // [新增] 场景编排入口
+                'scene-orchestration': path.resolve(__dirname, 'src/entries/scene_orchestration.jsx'),
             },
             output: {
                 entryFileNames: 'js/bundles/[name].js',

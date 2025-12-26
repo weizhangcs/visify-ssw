@@ -8,7 +8,9 @@ const { Paragraph, Text } = Typography;
 
 const SceneCard = ({ data, id }) => {
     const { content, isCollapsed, logicRole, onPlay } = data; // 从 data 解构 onPlay
-    const isFunctional = logicRole === 'functional_attachment';
+    const isEvent = data.nodeType === 'event'; // 'event' or 'functional'
+    const cardColor = isEvent ? '#fff' : '#f5f5f5'; // 事实=白, 功能=灰
+    // const borderColor = selected ? '#1890ff' : (isEvent ? '#d9d9d9' : '#faad14');
     const bgColor = SceneTypeColors[content.scene_type];
 
     // 类型颜色映射 (保持不变)
@@ -26,14 +28,14 @@ const SceneCard = ({ data, id }) => {
             <Handle type="target" position={Position.Left} id="in-seq" style={{ width: 10, height: 10, background: '#666' }} />
             <Handle type="target" position={Position.Top} id="in-attach" style={{ left: '50%', borderRadius: 0, width: 30, height: 8, background: '#faad14' }} />
 
-            <Badge.Ribbon text={isFunctional ? "挂件" : null} color="gold" style={{ display: isFunctional ? 'block' : 'none' }}>
+            <Badge.Ribbon text={isEvent ? "挂件" : null} color="gold" style={{ display: isEvent ? 'block' : 'none' }}>
                 <Card
                     size="small"
                     hoverable
                     style={{
                         width: isCollapsed ? 200 : 320,
-                        transform: isFunctional ? 'scale(0.85)' : 'scale(1)',
-                        opacity: isFunctional ? 0.9 : 1,
+                        transform: isEvent ? 'scale(0.85)' : 'scale(1)',
+                        opacity: isEvent ? 0.9 : 1,
                         backgroundColor: bgColor,
                         transition: 'all 0.3s',
                         border: '1px solid #d9d9d9',
