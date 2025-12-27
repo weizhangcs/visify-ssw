@@ -9,7 +9,7 @@ from tests.lib.refinery_bootstrap import RefineryAsyncTester, setup_django_env
 setup_django_env()
 
 from apps.refinery.models import Material  # noqa E402
-from apps.refinery.tasks import refinery_frame_extracting_task  # noqa E402
+from apps.refinery.tasks import refinery_frame_extract_task  # noqa E402
 
 
 def run_frame_test():
@@ -31,7 +31,7 @@ def run_frame_test():
 
     try:
         updated = RefineryAsyncTester.trigger_and_wait(
-            str(target.id), refinery_frame_extracting_task, timeout=600  # 2933 个切片抽帧会很久，请耐心等待
+            str(target.id), refinery_frame_extract_task, timeout=600  # 2933 个切片抽帧会很久，请耐心等待
         )
 
         # 3. 物理验收
@@ -39,7 +39,7 @@ def run_frame_test():
         slices = updated.visual_slices
         if slices and "frames" in slices[0] and len(slices[0]["frames"]) > 0:
             rel_path = slices[0]["frames"][0]["path"]
-            abs_path = Path(settings.MEDIA_ROOT) / rel_path
+            abs_path = Path(settings.MEDIA_ROOT) / "refinery" / rel_path
             print(f"✅ Success: Path recorded -> {rel_path}")
             if abs_path.exists():
                 print("✅ Success: Physical file verified on disk.")

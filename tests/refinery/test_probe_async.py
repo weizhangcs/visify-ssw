@@ -6,7 +6,6 @@ from tests.lib.refinery_bootstrap import RefineryAsyncTester, setup_django_env
 setup_django_env()
 
 # 2. 延迟导入业务模块
-from apps.media_assets.models import Media  # noqa: E402
 from apps.refinery.models import Material  # noqa: E402
 from apps.refinery.tasks import refinery_probe_task  # noqa: E402
 
@@ -16,27 +15,18 @@ def run_async_probe_test():
     print("🔭 Refinery Probe & Waveform - Async Starting Point Test")
     print("=" * 60)
 
-    # A. 寻找一个有源视频但还没有对应 Material 的 Media
-    # 这模拟了媒资新入库后，Refinery 首次介入的场景
-    media = Media.objects.filter(source_video__isnull=False, material__isnull=True).first()
+    # A. 寻找一个已完成转码（持有 Proxy）的物料
+    # 这是 Probe 的物理前置条件
+    material = Material.objects.filter(proxy_video__isnull=False).exclude(proxy_video="").first()
 
-    if not media:
-        # 兜底：如果所有 Media 都有了 Material，则找一个现成的并物理清理掉，以模拟“新物料”
-        media = Media.objects.filter(source_video__isnull=False).first()
-        if media and hasattr(media, "material"):
-            print(f"[*] Cleaning existing material for Media: {media.title}")
-            media.material.delete()
-
-    if not media:
-        print("❌ Error: No media with source video available for testing.")
+    if not material:
+        print("❌ Error: No material found with a valid proxy video. Please run Transcode test first.")
         return
 
-    # B. 物理创建物料 (Refinery 的起点)
-    print(f"[*] Creating new Material for Media: {media.title} (ID: {media.id})")
-    material = Material.objects.create(media=media)
+    print(f"[*] Target ID: {material.id}")
+    print(f"[*] Proxy Path: {material.proxy_video}")
 
     # B. 设置前置状态
-    print(f"[*] Target ID: {material.id}")
     if material.status != Material.Status.PROBING:
         material.start_probing()
         material.save()

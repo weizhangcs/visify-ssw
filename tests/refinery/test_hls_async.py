@@ -53,7 +53,7 @@ def run_async_hls_test():
             print("❌ Database Integrity: Invalid data in hls_playlist field!")
 
         # 验证 2: 物理文件验证
-        abs_index_path = Path(settings.MEDIA_ROOT) / updated_material.hls_playlist
+        abs_index_path = Path(settings.MEDIA_ROOT) / "refinery" / updated_material.hls_playlist
         if abs_index_path.exists():
             print(f"✅ Physical Artifact: Index file verified at {abs_index_path}")
             # 抽查切片文件是否存在

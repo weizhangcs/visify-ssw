@@ -55,6 +55,8 @@ class RefineryAsyncTester:
             # 每隔 10 秒采样一次
             time.sleep(10)
             elapsed = int(time.time() - start_time)
-            print(f"✅ [Async Processing] Material entered TRANSCODING state. spent: {elapsed}s.")
+            print(
+                f"✅ [Async Processing] Material entered PROCESSING(TRANSCODE/PROBING...etc) state. spent: {elapsed}s."
+            )
 
         raise TimeoutError(f"⏳ [Async Timeout] Task {task_obj.name} did not complete within {timeout}s.")

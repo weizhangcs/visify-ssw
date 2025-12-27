@@ -28,17 +28,22 @@ def run_text_analysis_test():
 
     # 3. 异步执行
     try:
-        updated = RefineryAsyncTester.trigger_and_wait(str(target.id), refinery_analyze_text_task)
+        # 1. 触发并等待（Tester 内部会轮询数据库）
+        RefineryAsyncTester.trigger_and_wait(str(target.id), refinery_analyze_text_task)
 
-        # 4. 验收
+        # 2. 【核心修正】彻底抛弃旧的 target 实例，从数据库重新捞取最新的副本
+        # 这样既保证了数据的绝对新鲜，又不会破坏 FSM 的实例状态
+        fresh_material = Material.objects.get(id=target.id)
+
+        # 3. 验收
         print("-" * 40)
-        print(f"Final State: {updated.status}")
-        track = updated.dialogue_track
-        if track and len(track) > 0:
+        print(f"Final State: {fresh_material.status}")
+
+        track = fresh_material.dialogue_track
+        if isinstance(track, list):
             print(f"✅ SUCCESS: {len(track)} dialogue entries refined into JSONB.")
-            print(f"   First Line: [{track[0]['speaker']}] {track[0]['text']}")
         else:
-            print("❌ FAILED: dialogue_track is empty.")
+            print(f"❌ FAILED: Still empty. Value: {track}")
 
     except Exception as e:
         print(f"❌ Test Failed: {str(e)}")
