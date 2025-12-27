@@ -7,15 +7,16 @@ from pathlib import Path
 
 import django
 
-from apps.media_assets.models import Media
-from apps.refinery.models import Material
-from apps.refinery.services.scheduler import RefineryScheduler
-
 # 1. 环境初始化
 BASE_DIR = Path(__file__).resolve().parent.parent
 sys.path.append(str(BASE_DIR))
 os.environ.setdefault("DJANGO_SETTINGS_MODULE", "visify_ssw.settings")
 django.setup()
+
+
+from apps.media_assets.models import Media  # noqa: E402
+from apps.refinery.models import Material  # noqa: E402
+from apps.refinery.services.scheduler import RefineryScheduler  # noqa: E402
 
 
 def run_refinery_test():

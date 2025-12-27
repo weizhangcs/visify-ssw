@@ -24,10 +24,12 @@ class Material(TimeStampedModel):
         FAILED = "FAILED", _("处理失败")
 
         # 本地精炼子状态 (细化执行态)
-        PROBING = "PROBING", _("元数据探测中")
-        TRANSCODING = "TRANSCODING", _("标准化转码中")  # 产出: Proxy, HLS, Waveform
+        PROBING = "PROBING", _("元数据探测中")  # 产出: Duration, Waveform
+        TRANSCODING = "TRANSCODING", _("标准化转码中")  # 产出: Proxy
+        HLS_FRAGMENTING = "HLS_FRAGMENTING", _("HLS切片中")  # 产出: HLS
         ANALYZING_TEXT = "ANALYZING_TEXT", _("文本清洗中")  # 产出: Dialogue JSON
-        SLICING = "SLICING", _("视觉切片中")  # 产出: Slices, Keyframes
+        SLICING = "SLICING", _("视觉切片中")  # 产出: Slices
+        FRAME_EXTRACTING = "FRAME_EXTRACTING", _("提取关键帧中")  # 产出: Slices, Keyframes
         SYNCING = "SYNCING", _("云端同步中")
 
         # 终态与兜底
@@ -48,13 +50,10 @@ class Material(TimeStampedModel):
 
     # --- 3. 本地标准化产出 (Local Artifacts) ---
     # 存储在 Edge 端，用于前端预览和本地算法输入
-    proxy_video = models.FileField(
-        upload_to="refinery/proxy/%Y/%m/", blank=True, null=True, verbose_name=_("代理视频 (720p)")
-    )
-    hls_playlist = models.FileField(upload_to="refinery/hls/%Y/%m/", blank=True, null=True, verbose_name=_("HLS 播放列表"))
-    waveform_data = models.FileField(
-        upload_to="refinery/waveform/%Y/%m/", blank=True, null=True, verbose_name=_("波形 JSON")
-    )
+    proxy_video = models.CharField(max_length=1024, blank=True, verbose_name=_("代理视频 (720p)地址"))
+    hls_playlist = models.CharField(max_length=1024, blank=True, verbose_name=_("HLS 播放列表索引文件地址"))
+
+    waveform_data = models.JSONField(default=list, blank=True, verbose_name=_("波形JSON"))
 
     # --- 4. 结构化生产数据 (Structured Data) ---
     # 取代文件流转，直接存入 JSONB 字段
@@ -84,18 +83,28 @@ class Material(TimeStampedModel):
         """开始探测元数据"""
         pass
 
-    @transition(field=status, source=Status.PENDING, target=Status.TRANSCODING)
-    def start_transcoding(self):
-        """开始本地加工 (转码/HLS)"""
-        pass
-
     @transition(field=status, source=Status.PENDING, target=Status.ANALYZING_TEXT)
     def start_analyzing_text(self):
         """开始本地加工 (文本清洗)"""
         pass
 
+    @transition(field=status, source=Status.PENDING, target=Status.TRANSCODING)
+    def start_transcoding(self):
+        """开始本地加工 (转码)"""
+        pass
+
+    @transition(field=status, source=Status.PENDING, target=Status.HLS_FRAGMENTING)
+    def start_hls_fragmenting(self):
+        """开始本地加工 (HLS)"""
+        pass
+
     @transition(field=status, source=Status.PENDING, target=Status.SLICING)
     def start_slicing(self):
+        """开始视觉切片"""
+        pass
+
+    @transition(field=status, source=Status.PENDING, target=Status.FRAME_EXTRACTING)
+    def start_frame_extracting(self):
         """开始视觉切片"""
         pass
 
@@ -107,7 +116,15 @@ class Material(TimeStampedModel):
     # 定义从所有“执行中”状态回到 PENDING 的合法路径
     @transition(
         field=status,
-        source=[Status.PROBING, Status.TRANSCODING, Status.ANALYZING_TEXT, Status.SLICING, Status.SYNCING],
+        source=[
+            Status.PROBING,
+            Status.TRANSCODING,
+            Status.ANALYZING_TEXT,
+            Status.SLICING,
+            Status.SYNCING,
+            Status.FRAME_EXTRACTING,
+            Status.HLS_FRAGMENTING,
+        ],
         target=Status.PENDING,
     )
     def finish_current_task(self):
@@ -116,7 +133,7 @@ class Material(TimeStampedModel):
         """
         logger.info(f"Task finished for {self.id}, returning to PENDING for re-scheduling.")
 
-    @transition(field=status, source=Status.SYNCING, target=Status.READY)
+    @transition(field=status, source=Status.PENDING, target=Status.READY)
     def mark_ready(self):
         """标记为就绪"""
         pass

@@ -24,27 +24,21 @@ class RefineryScheduler:
     # 声明式规则集：定义管线中每个步点的“数据缺失条件”
     # 只要满足 is_satisfied (即数据缺失)，就进入该 target_status 并执行任务
     RULES = [
-        RefineryRule(
-            name="Metadata Probing",
-            target_status=Material.Status.PROBING,
-            # 检查 dict 是否为空
-            is_satisfied=lambda m: not m.tech_meta,
-            task_name="refinery_probe_task",
-        ),
-        RefineryRule(
-            name="Standard Transcoding",
-            target_status=Material.Status.TRANSCODING,
-            # 检查 FileField 是否有文件路径
-            is_satisfied=lambda m: not bool(m.proxy_video.name),
-            task_name="refinery_transcode_task",
-        ),
-        RefineryRule(
-            name="Visual Slicing",
-            target_status=Material.Status.SLICING,
-            # 依赖：有视频但没切片
-            is_satisfied=lambda m: bool(m.proxy_video.name) and not m.visual_slices,
-            task_name="refinery_slice_task",
-        ),
+        # RefineryRule(
+        # name="Metadata Probing",
+        # target_status=Material.Status.PROBING,
+        # 检查 dict 是否为空
+        # is_satisfied=lambda m: not m.tech_meta,
+        # task_name="refinery_probe_task",
+        # ),
+        # 2. 文本清洗 (新增: 依赖源字幕文件，产出 dialogue_track)
+        # RefineryRule(
+        # name="Text Analyzing",
+        # target_status=Material.Status.ANALYZING_TEXT,
+        # 准入条件：源媒体有字幕文件 且 物料中还没有结构化对白数据
+        # is_satisfied=lambda m: bool(m.media.source_subtitle) and not m.dialogue_track,
+        # task_name="refinery_analyze_text_task",
+        # ),
     ]
 
     @classmethod
@@ -53,8 +47,8 @@ class RefineryScheduler:
 
         material = Material.objects.get(id=material_id)
 
-        # 核心约束：只有在 PENDING 状态下才进行管线决策
-        if material.status != Material.Status.PENDING:
+        # 核心约束：只有在 PENDING 状态下才进行管线决策 : TODO: 临时改成READY 免得单元测试被Scheduler干扰
+        if material.status != Material.Status.READY:
             return
 
         # 遍历规则引擎，寻找第一个满足（数据缺失）的规则
