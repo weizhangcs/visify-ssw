@@ -23,7 +23,7 @@ def run_text_analysis_test():
     # 2. 设置状态
     print(f"[*] Target ID: {target.id}")
     if target.status != Material.Status.PENDING:
-        target.start_analyzing_text()  # 假设模型有此方法
+        target.start_analyzing_text()
         target.save()
 
     # 3. 异步执行

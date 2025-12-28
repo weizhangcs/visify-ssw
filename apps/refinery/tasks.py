@@ -184,3 +184,43 @@ def refinery_frame_extract_task(material_id: str):
 
     except Exception as e:
         _handle_task_error(material_id, f"Frame Extraction Failed: {str(e)}")
+
+
+@shared_task(name="apps.refinery.tasks.refinery_sync_task", queue="media_queue")
+def refinery_sync_task(material_id: str):
+    """
+    [原子任务] 帧数据同步
+    范式：SyncContext 准备路径与配置 -> TicketUploader 执行搬运 -> Context 回填 GS 路径
+    """
+    from .services.context import RefineryContext
+    from .services.scheduler import RefineryScheduler
+    from .services.uploader import TicketUploader
+
+    try:
+        with RefineryContext(material_id) as ctx:
+            # 1. 提取物理清单
+            files_to_sync = ctx.frame_paths_manifest
+            if not files_to_sync:
+                logger.info(f"Sync Task: No frames to upload for {material_id}. Skipping.")
+                ctx.material.finish_current_task()  # 即使没图也要闭环状态机
+                ctx.material.save()
+                return
+
+            # 2. 调用搬运算子 (注入 Context 提供的配置和伪装 ID)
+            uploader = TicketUploader(
+                material_id=str(ctx.material_id),  # 伪装为 media_id
+                asset_id=str(ctx.material.media.asset_id),
+                cloud_client=ctx.cloud_client,
+            )
+
+            # 这里会看到你想要的 Batch 和 Progress 日志
+            cloud_mapping = uploader.upload_files(files_to_sync)
+
+            # 3. 数据回填 (Remapping)
+            ctx.commit_sync_results(cloud_mapping)
+
+        # 4. 触发调度逻辑 (如通知云端或进入下一个状态)
+        RefineryScheduler.schedule(material_id)
+
+    except Exception as e:
+        _handle_task_error(material_id, f"Sync Stage Failed: {str(e)}")

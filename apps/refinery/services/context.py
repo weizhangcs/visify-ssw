@@ -9,6 +9,7 @@ from django.conf import settings
 from django.db import transaction
 
 from ..models import Material
+from .uploader import VSSCloudService
 
 logger = logging.getLogger(__name__)
 
@@ -175,3 +176,52 @@ class RefineryContext:
 
         self.material.save(update_fields=["visual_slices", "status", "modified"])
         logger.info(f"Context: All frames committed for {self.material_id}")
+
+    @property
+    def cloud_client(self) -> VSSCloudService:
+        """从数据库读取集成配置，注入纯净算子"""
+        from apps.configuration.models import IntegrationSettings
+
+        cfg = IntegrationSettings.get_solo()
+        if not cfg.cloud_api_base_url or not cfg.cloud_api_key:
+            raise ValueError("Cloud integration settings are missing (URL or API Key).")
+
+        return VSSCloudService(
+            base_url=cfg.cloud_api_base_url, api_key=cfg.cloud_api_key, instance_id=cfg.cloud_instance_id
+        )
+
+    @property
+    def frame_paths_manifest(self) -> List[Path]:
+        """扫描 visual_slices，提取所有需要同步的本地物理路径"""
+        paths = []
+        slices = self.material.visual_slices or []
+        for s in slices:
+            for frame in s.get("frames", []):
+                # 利用 media_dir 自动拼接绝对路径
+                abs_path = self.media_dir / frame["path"]
+                if abs_path.exists():
+                    paths.append(abs_path)
+                else:
+                    logger.warning(f"Sync: Frame file missing at {abs_path}")
+        return paths
+
+    def commit_sync_results(self, cloud_mapping: Dict[str, str]):
+        """将本地路径替换为云端 GS 路径，并持久化 JSONB"""
+        slices = self.material.visual_slices
+        updated_count = 0
+
+        for s in slices:
+            for frame in s.get("frames", []):
+                local_abs = str(self.media_dir / frame["path"])
+                if local_abs in cloud_mapping:
+                    # 关键替换：本地相对路径 -> 远程 GS 路径
+                    frame["path"] = cloud_mapping[local_abs]
+                    updated_count += 1
+
+        self.material.visual_slices = slices
+        # 更新状态为已完成（假设 Sync 是精炼厂最后一步）
+        if self.material.status == self.material.Status.SYNCING:
+            self.material.finish_current_task()
+
+        self.material.save(update_fields=["visual_slices", "status", "modified"])
+        logger.info(f"Context: {updated_count} frame paths remapped to cloud for {self.material_id}")
