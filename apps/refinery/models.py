@@ -52,7 +52,6 @@ class Material(TimeStampedModel):
     # 存储在 Edge 端，用于前端预览和本地算法输入
     proxy_video = models.CharField(max_length=1024, blank=True, verbose_name=_("代理视频 (720p)地址"))
     hls_playlist = models.CharField(max_length=1024, blank=True, verbose_name=_("HLS 播放列表索引文件地址"))
-
     waveform_data = models.JSONField(default=list, blank=True, verbose_name=_("波形JSON"))
 
     # --- 4. 结构化生产数据 (Structured Data) ---
@@ -77,7 +76,10 @@ class Material(TimeStampedModel):
     tech_meta = models.JSONField(default=dict, blank=True, verbose_name=_("FFprobe 元数据"))
     error_log = models.TextField(blank=True, default="", verbose_name=_("错误日志"))
 
-    # --- 7. 状态机流转定义 ---
+    # --- 7. 生产管线的metrics ---
+    pipeline_metrics = models.JSONField(default=dict, blank=True, verbose_name=_("管线执行指标"))
+
+    # --- 8. 状态机流转定义 ---
     @transition(field=status, source=Status.PENDING, target=Status.PROBING)
     def start_probing(self):
         """开始探测元数据"""

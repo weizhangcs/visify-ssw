@@ -347,6 +347,11 @@ UNFOLD = {
                         "link": reverse_lazy("admin:workflow_transcodingproject_changelist"),
                     },
                     {
+                        "title": "精炼物料中心",
+                        "icon": "Settings_suggest",  # 使用具有“精炼/处理”语义的图标
+                        "link": reverse_lazy("admin:refinery_material_changelist"),
+                    },
+                    {
                         "title": "角色标注项目",  # Character Annotation 入口
                         "icon": "face",
                         "link": reverse_lazy("admin:workflow_characterannotationproject_changelist"),

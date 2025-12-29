@@ -167,3 +167,20 @@ class CloudApiService:
         except requests.exceptions.RequestException as e:
             logger.error(f"Cloud API: 下载通用文件失败: {file_path}。错误: {e}", exc_info=True)
             return False, None
+
+    def get_upload_tickets(self, asset_id: str, media_id: str, filenames: list) -> Dict[str, Any]:
+        """
+        [同步接口] 向云端换取 GCS/S3 预签名上传地址 (Tickets)
+        用于大规模帧数据的直传。
+        """
+        endpoint = f"{self.BASE_URL.rstrip('/')}/api/v1/files/upload-ticket"
+        headers = self._get_auth_headers()
+        payload = {"asset_id": asset_id, "media_id": media_id, "filenames": filenames}
+
+        try:
+            response = requests.post(endpoint, headers=headers, json=payload, timeout=60)
+            response.raise_for_status()
+            return response.json()
+        except requests.exceptions.RequestException as e:
+            logger.error(f"Cloud API: 换票请求失败: {e}", exc_info=True)
+            raise RuntimeError(f"Failed to fetch upload tickets: {str(e)}")

@@ -1,78 +1,148 @@
-# 文件路径: apps/refinery/services/scheduler.py
-
+# apps/refinery/services/scheduler.py
+import logging
+import time
 from dataclasses import dataclass
-from typing import Callable
+from typing import Callable, Dict, List, Optional
 
 from apps.refinery.models import Material
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
 class RefineryRule:
-    name: str
-    target_status: str
-    # 核心：基于数据的准入判定
-    is_satisfied: Callable[[Material], bool]
-    # 对应的原子任务
-    task_name: str
+    slug: str  # 唯一标识 (用于 API 和指标 Key)
+    name: str  # UI 友好名称
+    target_status: str  # 对应的 FSM 状态
+    is_satisfied: Callable[[Material], bool]  # 准入判定：True 表示数据缺失，需执行
+    task_name: str  # 绑定的 Celery 任务名
 
 
 class RefineryScheduler:
-    """
-    [精炼决策引擎] 基于 PENDING 状态的回流决策机制。
-    """
-
-    # 声明式规则集：定义管线中每个步点的“数据缺失条件”
-    # 只要满足 is_satisfied (即数据缺失)，就进入该 target_status 并执行任务
-    RULES = [
-        # RefineryRule(
-        # name="Metadata Probing",
-        # target_status=Material.Status.PROBING,
-        # 检查 dict 是否为空
-        # is_satisfied=lambda m: not m.tech_meta,
-        # task_name="refinery_probe_task",
-        # ),
-        # 2. 文本清洗 (新增: 依赖源字幕文件，产出 dialogue_track)
-        # RefineryRule(
-        # name="Text Analyzing",
-        # target_status=Material.Status.ANALYZING_TEXT,
-        # 准入条件：源媒体有字幕文件 且 物料中还没有结构化对白数据
-        # is_satisfied=lambda m: bool(m.media.source_subtitle) and not m.dialogue_track,
-        # task_name="refinery_analyze_text_task",
-        # ),
+    # 配置式规则描述：定义严格的线性精炼顺序
+    RULES: List[RefineryRule] = [
+        RefineryRule(
+            "transcode", "标准化转码", Material.Status.TRANSCODING, lambda m: not m.proxy_video, "refinery_transcode_task"
+        ),
+        RefineryRule(
+            "probe",
+            "元数据探测",
+            Material.Status.PROBING,
+            lambda m: m.duration <= 0 or not m.tech_meta,
+            "refinery_probe_task",
+        ),
+        RefineryRule(
+            "analyze_text",
+            "文本清洗",
+            Material.Status.ANALYZING_TEXT,
+            lambda m: bool(m.media.source_subtitle) and not m.dialogue_track,
+            "refinery_analyze_text_task",
+        ),
+        RefineryRule(
+            "hls",
+            "HLS切片",
+            Material.Status.HLS_FRAGMENTING,
+            lambda m: bool(m.proxy_video) and not m.hls_playlist,
+            "refinery_hls_task",
+        ),
+        RefineryRule(
+            "slicing",
+            "视觉切片",
+            Material.Status.SLICING,
+            lambda m: bool(m.proxy_video) and bool(m.dialogue_track) and not m.visual_slices,
+            "refinery_slicing_task",
+        ),
+        RefineryRule(
+            "frame_extract",
+            "抽帧提取",
+            Material.Status.FRAME_EXTRACTING,
+            lambda m: bool(m.visual_slices) and not any(s.get("frames") for s in m.visual_slices),
+            "refinery_frame_extract_task",
+        ),
+        RefineryRule(
+            "sync",
+            "云端同步",
+            Material.Status.SYNCING,
+            lambda m: bool(m.visual_slices)
+            and any(s.get("frames") and not s["frames"][0]["path"].startswith("gs://") for s in m.visual_slices),
+            "refinery_sync_task",
+        ),
     ]
 
     @classmethod
-    def schedule(cls, material_id: str):
-        from apps.refinery.models import Material
+    def get_pipeline_state(cls, material: Material) -> List[Dict]:
+        """[白盒化核心] 为 View 提供全量过程数据"""
+        state_list = []
+        metrics = material.pipeline_metrics or {}
+        found_breakpoint = False
 
-        material = Material.objects.get(id=material_id)
-
-        # 核心约束：只有在 PENDING 状态下才进行管线决策 : TODO: 临时改成READY 免得单元测试被Scheduler干扰
-        if material.status != Material.Status.READY:
-            return
-
-        # 遍历规则引擎，寻找第一个满足（数据缺失）的规则
         for rule in cls.RULES:
-            if rule.is_satisfied(material):
-                cls._dispatch(material, rule)
-                return
+            is_done = not rule.is_satisfied(material)
+            metric = metrics.get(rule.slug, {})
 
-        # 终点：如果没有任何规则被命中（代表数据全部就绪），则标记 READY
-        if material.status == Material.Status.PENDING:
-            material.mark_ready()
-            material.save(update_fields=["status", "modified"])
+            step_info = {
+                "slug": rule.slug,
+                "name": rule.name,
+                "is_done": is_done,
+                "duration": metric.get("duration"),
+                "finished_at": metric.get("finished_at"),
+                "is_current": False,
+                "has_error": False,
+                "error_log": "",
+            }
+
+            # 判定当前执行点或断点
+            if not is_done and not found_breakpoint:
+                step_info["is_current"] = True
+                found_breakpoint = True
+                if material.status == Material.Status.FAILED:
+                    step_info["has_error"] = True
+                    step_info["error_log"] = material.error_log
+
+            state_list.append(step_info)
+        return state_list
 
     @classmethod
-    def _dispatch(cls, material, rule: RefineryRule):
-        """执行 FSM 跳转并分发 Celery 任务"""
-        # 动态调用模型的 start_xxx 方法
+    def record_and_schedule(cls, material_id: str, slug: str, duration: float):
+        """[回流入口] 记录指标并驱动下一步"""
+        material = Material.objects.get(id=material_id)
+        metrics = material.pipeline_metrics or {}
+        metrics[slug] = {"duration": duration, "finished_at": time.strftime("%Y-%m-%d %H:%M:%S")}
+        material.pipeline_metrics = metrics
+        material.save(update_fields=["pipeline_metrics"])
+
+        # 触发自动决策
+        cls.schedule(material_id)
+
+    @classmethod
+    def schedule(cls, material_id: str, start_from_slug: Optional[str] = None):
+        """线性决策引擎：支持断点续传与手动重入"""
+        material = Material.objects.get(id=material_id)
+
+        target_rule = None
+        if start_from_slug:
+            # 手动定点重试
+            target_rule = next((r for r in cls.RULES if r.slug == start_from_slug), None)
+        else:
+            # 自动寻找第一个数据缺失点
+            target_rule = next((r for r in cls.RULES if r.is_satisfied(material)), None)
+
+        if target_rule:
+            cls._dispatch(material, target_rule)
+        else:
+            if material.status != Material.Status.READY:
+                material.mark_ready()
+                material.save(update_fields=["status", "modified"])
+
+    @classmethod
+    def _dispatch(cls, material, rule):
+        """执行状态流转并异步分发"""
         transition_method = f"start_{rule.target_status.lower()}"
         if hasattr(material, transition_method):
             getattr(material, transition_method)()
             material.save(update_fields=["status", "modified"])
 
-            # 派发任务
-            from .. import tasks
+        from .. import tasks
 
-            task_func = getattr(tasks, rule.task_name)
-            task_func.delay(str(material.id))
+        task_func = getattr(tasks, rule.task_name)
+        task_func.delay(str(material.id))
