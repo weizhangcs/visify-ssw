@@ -39,6 +39,13 @@ class RefineryScheduler:
             "refinery_analyze_text_task",
         ),
         RefineryRule(
+            "character_recognition",
+            "角色识别",
+            Material.Status.CHARACTER_RECOGNIZING,
+            lambda m: bool(m.media.source_subtitle) and m.dialogue_track,
+            "refinery_character_recognition_task",
+        ),
+        RefineryRule(
             "hls",
             "HLS切片",
             Material.Status.HLS_FRAGMENTING,

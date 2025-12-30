@@ -1,5 +1,6 @@
 # 文件路径: apps/workflow/common/cloud_client.py
 import logging
+import time
 from pathlib import Path
 from typing import Any, Dict, Optional, Tuple
 from urllib.parse import urlparse
@@ -184,3 +185,26 @@ class CloudApiService:
         except requests.exceptions.RequestException as e:
             logger.error(f"Cloud API: 换票请求失败: {e}", exc_info=True)
             raise RuntimeError(f"Failed to fetch upload tickets: {str(e)}")
+
+    def wait_for_task_completion(
+        self, task_id: int, timeout: int = 1800, interval: int = 10
+    ) -> Tuple[bool, Optional[Dict]]:
+        """
+        [同步阻塞轮询]
+        让调用者像调用同步 API 一样等待异步任务完成。
+        """
+        start_time = time.time()
+        while time.time() - start_time < timeout:
+            success, data = self.get_task_status(task_id)
+            if not success:
+                return False, {"message": "Query failed"}
+
+            status = data.get("status")
+            if status == "COMPLETED":
+                return True, data
+            if status == "FAILED":
+                return False, data
+
+            time.sleep(interval)
+
+        return False, {"message": "Task timeout"}

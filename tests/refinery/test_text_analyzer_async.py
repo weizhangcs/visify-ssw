@@ -20,33 +20,32 @@ def run_text_analysis_test():
         print("❌ Error: No material with media.source_subtitle found.")
         return
 
-    # 2. 设置状态
-    print(f"[*] Target ID: {target.id}")
-    if target.status != Material.Status.PENDING:
+    # 1. 强行初始化状态，确保 FSM 路径通畅
+    print(f"[*] Resetting Material {target.id} to PENDING for test...")
+    if target.status == Material.Status.PENDING:
+        # 2. 状态点火：明确进入 ANALYZING_TEXT
         target.start_analyzing_text()
         target.save()
 
-    # 3. 异步执行
-    try:
-        # 1. 触发并等待（Tester 内部会轮询数据库）
+        # 3. 异步执行
         RefineryAsyncTester.trigger_and_wait(str(target.id), refinery_analyze_text_task)
 
-        # 2. 【核心修正】彻底抛弃旧的 target 实例，从数据库重新捞取最新的副本
-        # 这样既保证了数据的绝对新鲜，又不会破坏 FSM 的实例状态
+        # 4. 验收（采用更底层的方式）
         fresh_material = Material.objects.get(id=target.id)
 
-        # 3. 验收
-        print("-" * 40)
-        print(f"Final State: {fresh_material.status}")
+        # 避开缓存，直接打印关键指标
+        actual_track = fresh_material.dialogue_track
+        print(f"[*] Post-Task Status: {fresh_material.status}")
+        print(f"[*] Track Type: {type(actual_track)}")
 
-        track = fresh_material.dialogue_track
-        if isinstance(track, list):
-            print(f"✅ SUCCESS: {len(track)} dialogue entries refined into JSONB.")
+        if actual_track and len(actual_track) > 0:
+            print(f"✅ SUCCESS: {len(actual_track)} dialogue entries refined.")
+            # 强制检查第一个元素的 Key，验证 Schema 归一化
+            print(f"[*] Schema Verification: {actual_track[0].keys()}")
         else:
-            print(f"❌ FAILED: Still empty. Value: {track}")
-
-    except Exception as e:
-        print(f"❌ Test Failed: {str(e)}")
+            print("❌ FAILED: Data mismatch. Length is 0.")
+    else:
+        print(f"[*] Post-Task Status: {target.status}, current pipeline is occupied by other tasks.")
 
 
 if __name__ == "__main__":

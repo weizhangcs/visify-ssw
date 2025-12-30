@@ -244,3 +244,36 @@ def refinery_sync_task(material_id: str):
         _handle_task_success(material_id, slug, start_time)
     except Exception as e:
         _handle_task_error(material_id, slug, str(e))
+
+
+@shared_task(name="apps.refinery.tasks.refinery_character_recognition_task", queue="media_queue")
+def refinery_character_recognition_task(material_id: str):
+    from apps.workflow.common.cloud_client import CloudApiService
+
+    from .services.character_refiner import CharacterRefinerService
+    from .services.context import RefineryContext
+
+    start_time = time.time()
+    slug = "character_recognition"
+    cloud_client = CloudApiService()
+
+    try:
+        with RefineryContext(material_id) as ctx:
+            # 1. Context 负责准备物理参数
+            # 1. Context 负责准备物理路径和元数据
+            local_json_path = ctx.prepare_dialogue_json()
+            asset_meta = ctx.get_asset_metadata_for_refiner()
+
+            # 2. Service 仅作为纯粹的算子执行，不持有 ctx 对象
+            result_data = CharacterRefinerService.run(
+                client=cloud_client, local_json_path=local_json_path, asset_meta=asset_meta
+            )
+
+            # 3. Context 负责将数据持久化
+            ctx.apply_character_recognition_results(result_data)
+
+        # 成功回流指标
+        _handle_task_success(material_id, slug, start_time)
+
+    except Exception as e:
+        _handle_task_error(material_id, slug, str(e))

@@ -1,9 +1,9 @@
 # 文件路径: apps/refinery/services/context.py
-
+import json
 import logging
 import shutil
 from pathlib import Path
-from typing import Dict, List
+from typing import Any, Dict, List
 
 from django.conf import settings
 from django.db import transaction
@@ -225,3 +225,54 @@ class RefineryContext:
 
         self.material.save(update_fields=["visual_slices", "status", "modified"])
         logger.info(f"Context: {updated_count} frame paths remapped to cloud for {self.material_id}")
+
+    def get_asset_metadata_for_refiner(self) -> Dict[str, Any]:
+        """
+        [元数据提取契约] 为 CharacterRefiner 提供所需的 Asset 级别信息。
+        """
+        asset = self.material.media.asset
+
+        # 处理语言格式: zh-CN -> zh
+        lang_raw = asset.language or "zh"
+        lang_processed = lang_raw.split("-")[0]
+
+        return {
+            "video_title": asset.title,
+            "known_characters": asset.known_characters,  # 对应 Asset 模型的 JSONField
+            "lang": lang_processed,
+        }
+
+    def prepare_dialogue_json(self) -> Path:
+        """
+        [物理化契约] 零映射导出逻辑。
+        数据库中的每一项已是标准 SubtitleItem，直接导出为 List。
+        """
+        temp_path = self.work_dir / f"dialogue_input_{self.material_id}.json"
+
+        # 核心：直接 dump 数据库字段，不再需要逐个 key 手动映射
+        with open(temp_path, "w", encoding="utf-8") as f:
+            json.dump(self.dialogue_track, f, ensure_ascii=False, indent=2)
+
+        return temp_path
+
+    def apply_character_recognition_results(self, result_json: Dict):
+        """
+        [语义反写契约] 解析云端 optimized_subtitles 并精准回填至 JSONB。
+        """
+        updated_track = self.dialogue_track
+        # 核心逻辑：基于 index 映射回填角色名
+        # 由于 result_json 也是 List[SubtitleItem] 子集
+        for item in result_json:
+            idx = item.get("index")
+            if idx is not None and idx < len(updated_track):
+                # 仅回填更新的语义字段
+                updated_track[idx]["speaker"] = item.get("speaker", "Unknown")
+                updated_track[idx]["reasoning"] = item.get("reasoning")
+
+        self.material.dialogue_track = updated_track
+
+        if self.material.status == self.material.Status.CHARACTER_RECOGNIZING:
+            self.material.finish_current_task()
+
+        self.material.save(update_fields=["dialogue_track", "status", "modified"])
+        logger.info(f"Context: Character recognization result committed for {self.material_id}")

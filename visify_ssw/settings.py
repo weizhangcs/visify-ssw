@@ -233,6 +233,7 @@ CELERY_IMPORTS = (
     "apps.workflow.creative.tasks",
     "apps.workflow.character_annotation.tasks",
     "apps.workflow.scene_annotation.tasks",
+    "apps.workflow.refinery.tasks",  # 开发atomflow使用的隔离环境
     "apps.refinery.tasks",
     "apps.workflow.common.tasks",
 )
@@ -262,6 +263,7 @@ CELERY_TASK_ROUTES = {
     "apps.refinery.tasks.refinery_hls_task": {"queue": "media_queue"},
     "apps.refinery.tasks.refinery_slicing_task": {"queue": "media_queue"},
     "apps.refinery.tasks.refinery_frame_extracting_task": {"queue": "media_queue"},
+    "apps.refinery.tasks.refinery_character_recognition_task": {"queue": "media_queue"},
     # 2. 预标注 - 切片与上传 (将来实现) -> media_queue
     "apps.media_assets.tasks.slice_and_upload_task": {"queue": "media_queue"},
     # 3. 其他所有任务 (Cloud API请求、回调处理、DB操作) -> 默认走 default 队列

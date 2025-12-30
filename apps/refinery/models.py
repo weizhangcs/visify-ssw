@@ -31,6 +31,7 @@ class Material(TimeStampedModel):
         SLICING = "SLICING", _("视觉切片中")  # 产出: Slices
         FRAME_EXTRACTING = "FRAME_EXTRACTING", _("提取关键帧中")  # 产出: Slices, Keyframes
         SYNCING = "SYNCING", _("云端同步中")
+        CHARACTER_RECOGNIZING = "CHARACTER_RECOGNIZING", _("角色识别中")
 
         # 终态与兜底
         READY = "READY", _("就绪 (Production Ready)")
@@ -115,6 +116,11 @@ class Material(TimeStampedModel):
         """开始云端同步"""
         pass
 
+    @transition(field=status, source=Status.PENDING, target=Status.CHARACTER_RECOGNIZING)
+    def start_character_recognizing(self):
+        """开始云端同步"""
+        pass
+
     # 定义从所有“执行中”状态回到 PENDING 的合法路径
     @transition(
         field=status,
@@ -126,6 +132,7 @@ class Material(TimeStampedModel):
             Status.SYNCING,
             Status.FRAME_EXTRACTING,
             Status.HLS_FRAGMENTING,
+            Status.CHARACTER_RECOGNIZING,
         ],
         target=Status.PENDING,
     )
