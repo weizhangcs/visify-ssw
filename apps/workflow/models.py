@@ -16,9 +16,6 @@ from .delivery.jobs import DeliveryJob
 
 # --- 从 inference 子包导入 ---
 from .inference.projects import InferenceProject
-
-# --- 独立隔离开发 refinery 子包 测试atomflow 的架构改造 ---
-from .refinery.models import BaseAtomflowRule, RefineryPipeline, RefineryRule, RefineryUnit
 from .scene_annotation.models import SceneAnnotationJob, SceneAnnotationProject
 from .transcoding.jobs import TranscodingJob
 from .transcoding.projects import TranscodingProject
@@ -36,8 +33,4 @@ __all__ = [
     "CharacterAnnotationJob",
     "SceneAnnotationJob",
     "SceneAnnotationProject",
-    "RefineryPipeline",
-    "RefineryUnit",
-    "RefineryRule",
-    "BaseAtomflowRule",
 ]

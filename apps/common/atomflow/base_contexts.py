@@ -39,7 +39,7 @@ class BasePipelineContext(ABC):
         return self.pipeline.rule.rules_config if hasattr(self.pipeline, "rule") else []
 
     @transaction.atomic
-    def transit_state(self, seq: int, event: str, duration: float = 0, error_msg: str = None):
+    def transit_state(self, seq: int, slug: str, event: str, duration: float = 0, error_msg: str = None):
         """
         [Handler] 驱动工程状态流展。
         event: START / SUCCESS / FAIL
@@ -47,19 +47,24 @@ class BasePipelineContext(ABC):
         metrics = self.pipeline.metrics or {}
         str_seq = str(seq)
 
+        # 确保 metrics 中该 seq 的记录存在，并初始化/更新 slug
+        if str_seq not in metrics:
+            metrics[str_seq] = {}
+        metrics[str_seq]["slug"] = slug
+
         if event == "START":
             self.pipeline.status = "RUNNING"
-            metrics[str_seq] = {"status": "RUNNING", "start_at": time.time()}
+            metrics[str_seq].update({"status": "RUNNING", "start_at": time.time()})
 
         elif event == "SUCCESS":
-            metrics[str_seq] = {"status": "SUCCESS", "duration": duration, "finished_at": time.time()}
+            metrics[str_seq].update({"status": "SUCCESS", "duration": duration, "finished_at": time.time()})
             # 如果是最后一个 seq (基于 rules_config 判定)，可将 pipeline.status 设为 SUCCESS
 
         elif event == "FAIL":
             self.pipeline.status = "FAILED"
             self.pipeline.stop_point = seq
             self.pipeline.error_log = error_msg
-            metrics[str_seq] = {"status": "FAILED", "error": error_msg, "finished_at": time.time()}
+            metrics[str_seq].update({"status": "FAILED", "error": error_msg, "finished_at": time.time()})
 
         self.pipeline.metrics = metrics
         self.pipeline.save(update_fields=["status", "metrics", "stop_point", "error_log"])

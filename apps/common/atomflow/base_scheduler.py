@@ -83,3 +83,22 @@ class BaseAtomScheduler(ABC):
             if str(item["seq"]) == str(seq):
                 return item.get("obligation") == "OPTIONAL"
         return False
+
+    @classmethod
+    def manual_resume(cls, pipeline_id: str, step_order: int = None):
+        """[新增] 手动继续执行接口"""
+        # 1. 实例化上下文
+        pipe_ctx = cls.get_pipeline_context(pipeline_id)
+        rules = pipe_ctx.get_rules_config()
+
+        # 2. 决策重入点
+        target_step = None
+        if step_order:
+            target_step = next((r for r in rules if r["seq"] == step_order), None)
+        else:
+            # 自动找第一个没成功的 REQUIRED 步骤
+            history = pipe_ctx.get_history()
+            target_step = next((r for r in rules if str(r["seq"]) not in history), None)
+
+        if target_step:
+            cls.dispatch(pipeline_id, target_step)

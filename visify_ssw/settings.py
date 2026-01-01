@@ -41,7 +41,7 @@ INSTALLED_APPS = [
     "apps.media_assets.apps.MediaAssetsConfig",
     "apps.configuration.apps.ConfigurationConfig",
     "apps.workflow.apps.WorkflowConfig",
-    "apps.refinery.apps.RefineryConfig",
+    "apps.atomflow.apps.AtomflowConfig",
     # --- APP REGISTRY END ---
     "corsheaders",
     "solo",
@@ -233,9 +233,9 @@ CELERY_IMPORTS = (
     "apps.workflow.creative.tasks",
     "apps.workflow.character_annotation.tasks",
     "apps.workflow.scene_annotation.tasks",
-    "apps.workflow.refinery.tasks",  # 开发atomflow使用的隔离环境
-    "apps.refinery.tasks",
     "apps.workflow.common.tasks",
+    # [新增] 注册 atomflow 旁路任务模块
+    "apps.atomflow.refinery.tasks",
 )
 
 # 定义队列
@@ -258,14 +258,8 @@ CELERY_TASK_ROUTES = {
     "apps.workflow.transcoding.tasks.generate_waveform": {"queue": "media_queue"},
     "apps.workflow.creative.tasks.start_synthesis_task": {"queue": "media_queue"},
     "apps.workflow.creative.tasks.finalize_synthesis_task": {"queue": "media_queue"},
-    "apps.refinery.tasks.refinery_probe_task": {"queue": "media_queue"},
-    "apps.refinery.tasks.refinery_transcode_task": {"queue": "media_queue"},
-    "apps.refinery.tasks.refinery_hls_task": {"queue": "media_queue"},
-    "apps.refinery.tasks.refinery_slicing_task": {"queue": "media_queue"},
-    "apps.refinery.tasks.refinery_frame_extracting_task": {"queue": "media_queue"},
-    "apps.refinery.tasks.refinery_character_recognition_task": {"queue": "media_queue"},
-    # 2. 预标注 - 切片与上传 (将来实现) -> media_queue
-    "apps.media_assets.tasks.slice_and_upload_task": {"queue": "media_queue"},
+    # [新增] 注册 atomflow 旁路原子任务路由
+    "apps.atomflow.refinery.tasks.execute_step": {"queue": "media_queue"},
     # 3. 其他所有任务 (Cloud API请求、回调处理、DB操作) -> 默认走 default 队列
     "*": {"queue": "default"},
 }
@@ -347,11 +341,6 @@ UNFOLD = {
                         "title": "转码项目",
                         "icon": "movie_filter",
                         "link": reverse_lazy("admin:workflow_transcodingproject_changelist"),
-                    },
-                    {
-                        "title": "精炼物料中心",
-                        "icon": "Settings_suggest",  # 使用具有“精炼/处理”语义的图标
-                        "link": reverse_lazy("admin:refinery_material_changelist"),
                     },
                     {
                         "title": "角色标注项目",  # Character Annotation 入口

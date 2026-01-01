@@ -1,5 +1,7 @@
+# apps/common/atomflow/schemas.py
+
 from enum import Enum
-from typing import List, Optional
+from typing import Any, List, Optional
 
 from pydantic import BaseModel, Field
 
@@ -56,3 +58,19 @@ class AtomflowRuleSchema(BaseModel):
     """完整的规则编排定义"""
 
     rules: List[FlowRuleItemSchema]
+
+
+# [新增] 强制约束的运行指标 Schema
+class StepMetricSchema(BaseModel):
+    status: str  # SUCCESS | FAILED | RUNNING
+    duration: float = 0.0
+    start_at: float
+    finished_at: Optional[float] = None
+    error_info: Optional[str] = None
+
+
+# [新增] 算子执行结果契约
+class ExecutionResult(BaseModel):
+    success: bool
+    payload: Any = None
+    error_msg: Optional[str] = None

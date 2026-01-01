@@ -59,12 +59,23 @@ class BaseAtomflowRule(TimeStampedModel):
     # 使用 JSONField 存储，但增加保存时的 Schema 校验
     rules_config = models.JSONField(default=list)
 
+    # [新增] 冗余字段，用于 UI 快速展示步骤数量
+    step_count = models.PositiveIntegerField(default=0, verbose_name="步骤数", editable=False)
+
     def clean(self):
         """利用 Pydantic 在保存前强制校验 JSON 格式"""
         try:
             AtomflowRuleSchema(rules=self.rules_config)
         except Exception as e:
             raise ValidationError(f"Invalid rules_config Schema: {e}")
+
+    def save(self, *args, **kwargs):
+        # 自动计算步骤数量
+        if self.rules_config:
+            self.step_count = len(self.rules_config)
+        else:
+            self.step_count = 0
+        super().save(*args, **kwargs)
 
     class Meta:
         abstract = True
