@@ -5,7 +5,7 @@ import subprocess
 from pathlib import Path
 from typing import Dict, List
 
-from ..schemas import VisualSliceFrame
+from ..schemas import FrameData
 
 logger = logging.getLogger(__name__)
 
@@ -80,9 +80,9 @@ class FrameExtractorService:
         try:
             # 抽帧操作必须设置 timeout，防止某些损坏视频导致线程永久挂起
             subprocess.run(cmd, capture_output=True, check=True, timeout=15)
-            # 更新 slice 结构，填入抽帧结果
-            frame = VisualSliceFrame(position="mid", path=rel_path)
-            slice_data["frames"] = [frame.model_dump()]
+            # [Fix] 更新 visual_contents.frames
+            frame = FrameData(position="mid", path=rel_path)
+            slice_data["visual_contents"]["frames"] = [frame.model_dump()]
             return slice_data
         except subprocess.CalledProcessError as e:
             error_msg = e.stderr.decode() if e.stderr else "FFmpeg error"

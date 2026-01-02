@@ -21,20 +21,37 @@ class SubtitleItem(BaseModel):
         extra = "ignore"  # 允许云端返回额外字段但不报错，保持向后兼容
 
 
-class VisualSliceFrame(BaseModel):
+class FrameData(BaseModel):
+    """单帧画面的数据容器"""
+
     position: str = Field(..., description="mid | start | end")
     path: str = Field(..., description="相对路径")
 
 
-class VisualSliceItem(BaseModel):
-    """对应 visual_slices 的列表项"""
+class VisualContent(BaseModel):
+    """视觉内容容器"""
+
+    frames: List[FrameData] = Field(default_factory=list, description="该切片下的关键帧")
+    # keyframe_map: Dict = Field(default_factory=dict, description="本地视觉分析结果")
+    # visual_analysis: Dict = Field(default_factory=dict, description="云端VLM分析结果")
+
+
+class AudioContent(BaseModel):
+    """音频内容容器 (占位)"""
+
+    pass
+
+
+class MultimodalSlice(BaseModel):
+    """[核心容器] 多模态切片"""
 
     slice_id: int
     start_time: float
     end_time: float
     type: str = Field(..., description="visual_segment | dialogue")
-    text_content: Optional[str] = None
-    frames: List[VisualSliceFrame] = Field(default_factory=list, description="该切片下的关键帧")
+    text_contents: List[SubtitleItem] = Field(default_factory=list, description="无损对白数据")
+    visual_contents: VisualContent = Field(default_factory=VisualContent)
+    audio_contents: AudioContent = Field(default_factory=AudioContent)
 
 
 class VideoStreamMeta(BaseModel):

@@ -1,6 +1,6 @@
 import copy
 
-from ...schemas import VisualSliceItem
+from ...schemas import MultimodalSlice
 
 
 class SyncContextMixin:
@@ -11,7 +11,7 @@ class SyncContextMixin:
 
         files_to_upload = []
         for s in target.visual_slices:
-            for frame in s.get("frames", []):
+            for frame in s.get("visual_contents", {}).get("frames", []):
                 rel_path = frame.get("path")
                 if rel_path and not rel_path.startswith("http"):
                     abs_path = self.media_root / rel_path
@@ -29,14 +29,14 @@ class SyncContextMixin:
 
         updated_slices = copy.deepcopy(target.visual_slices)
         for s in updated_slices:
-            for frame in s.get("frames", []):
+            for frame in s.get("visual_contents", {}).get("frames", []):
                 rel_path = frame.get("path")
                 if rel_path:
                     abs_path = self.media_root / rel_path
                     if str(abs_path) in mapping:
                         frame["path"] = mapping[str(abs_path)]
 
-        target.visual_slices = [VisualSliceItem(**s).model_dump() for s in updated_slices]
+        target.visual_slices = [MultimodalSlice(**s).model_dump() for s in updated_slices]
 
     def _check_sync_ready(self, target):
         return bool(target.visual_slices)
@@ -45,7 +45,7 @@ class SyncContextMixin:
         if not target.visual_slices:
             return False
         first_slice = target.visual_slices[0]
-        frames = first_slice.get("frames", [])
+        frames = first_slice.get("visual_contents", {}).get("frames", [])
         if not frames:
             return False
         return frames[0].get("path", "").startswith("http")

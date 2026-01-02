@@ -5,7 +5,7 @@ import subprocess
 from pathlib import Path
 from typing import Dict, List
 
-from ..schemas import VisualSliceItem
+from ..schemas import MultimodalSlice, SubtitleItem
 
 logger = logging.getLogger(__name__)
 
@@ -32,7 +32,7 @@ class SlicingService:
         # 1. 物理执行：镜头变更探测 (基于 FFmpeg)
         scene_changes = SlicingService._detect_scene_changes(video_path, threshold=scene_threshold)
 
-        # 2. 逻辑执行：对白分组 (合并紧凑对话)
+        # 2. 逻辑执行：对白分组 (合并紧凑对话，返回的 content 仅用于时间边界确定)
         grouped_dialogues = SlicingService._group_dialogues(dialogue_track, gap_threshold=dialogue_gap)
 
         # 3. 逻辑执行：基于声纹的动态 Padding (呼吸感)
@@ -40,12 +40,15 @@ class SlicingService:
             grouped_dialogues, waveform_data, video_duration, max_pad=max_pad, silence_thresh=silence_thresh
         )
 
-        # 4. 纯逻辑执行：区间合并算法 (全覆盖)
-        slices_manifest = SlicingService._compute_slices_logic(
-            video_duration=video_duration, scene_changes=scene_changes, dialogue_track=padded_dialogues
+        # 4. [核心重构] 构建多模态切片容器
+        multimodal_slices = SlicingService._build_multimodal_slices(
+            video_duration=video_duration,
+            scene_changes=scene_changes,
+            padded_dialogues=padded_dialogues,
+            original_dialogue_track=dialogue_track,  # 传入原始轨道用于无损填充
         )
 
-        return slices_manifest
+        return multimodal_slices
 
     @staticmethod
     def _detect_scene_changes(video_path: Path, threshold: float = 0.3) -> List[float]:
@@ -82,29 +85,18 @@ class SlicingService:
 
         # 初始化第一个组
         current_group = sorted_track[0].copy()
-        # 格式化 content，保留说话人信息
-        spk = current_group.get("speaker", "Unknown")
-        txt = current_group.get("content", "")
-        current_group["content"] = f"[{spk}]: {txt}"
 
         for next_item in sorted_track[1:]:
             gap = next_item.get("start_time", 0) - current_group.get("end_time", 0)
 
-            # 阈值：1.0秒内的对话视为连续
+            # [优化] 不再拼接文本，只更新时间边界
             if gap < gap_threshold:
                 # 合并
                 current_group["end_time"] = next_item.get("end_time", 0)
-                next_spk = next_item.get("speaker", "Unknown")
-                next_txt = next_item.get("content", "")
-                # 追加文本
-                current_group["content"] += f"\n[{next_spk}]: {next_txt}"
             else:
                 # 封存当前组，开启新组
                 groups.append(current_group)
                 current_group = next_item.copy()
-                current_group[
-                    "content"
-                ] = f"[{current_group.get('speaker', 'Unknown')}]: {current_group.get('content', '')}"
 
         groups.append(current_group)
         return groups
@@ -165,71 +157,63 @@ class SlicingService:
         return groups
 
     @staticmethod
-    def _compute_slices_logic(
-        video_duration: float, scene_changes: List[float], dialogue_track: List[Dict]
+    def _build_multimodal_slices(
+        video_duration: float,
+        scene_changes: List[float],
+        padded_dialogues: List[Dict],
+        original_dialogue_track: List[Dict],
     ) -> List[Dict]:
-        """[纯算法] 核心时间轴合并逻辑 (代码逻辑同原版，仅去除依赖)"""
-        # [Fix] 移除最小阈值，实现全覆盖
-        MIN_VISUAL_DURATION = 0.0
-        slices = []
+        """[核心重构] 构建多模态切片容器的三步流程"""
+        # --- 步骤 1: 定义时间区间 (Temporal Segmentation) ---
+        temporal_segments = []
         last_time = 0.0
 
-        # dialogue_track 已经是经过分组和 Padding 的数据
-        for entry in dialogue_track:
+        for entry in padded_dialogues:
             start_sec, end_sec = float(entry.get("start_time", 0)), float(entry.get("end_time", 0))
-            # content 已经包含了 speaker 信息
-            content = entry.get("content", "")
 
             # Gap Filling
-            if start_sec > last_time and (start_sec - last_time) >= MIN_VISUAL_DURATION:
+            if start_sec > last_time:
                 internal_cuts = [t for t in scene_changes if last_time + 0.5 < t < start_sec - 0.5]
                 ptr = last_time
                 for cut in internal_cuts:
-                    slices.append(
-                        VisualSliceItem(
-                            slice_id=0,  # 稍后统一更新
-                            start_time=round(ptr, 3),
-                            end_time=round(cut, 3),
-                            type="visual_segment",
-                            text_content=None,
-                        ).model_dump()
-                    )
+                    temporal_segments.append({"start": ptr, "end": cut, "type": "visual_segment"})
                     ptr = cut
-
-                slices.append(
-                    VisualSliceItem(
-                        slice_id=0,
-                        start_time=round(ptr, 3),
-                        end_time=round(start_sec, 3),
-                        type="visual_segment",
-                        text_content=None,
-                    ).model_dump()
-                )
+                temporal_segments.append({"start": ptr, "end": start_sec, "type": "visual_segment"})
 
             # Dialogue Segment
-            slices.append(
-                VisualSliceItem(
-                    slice_id=0,
-                    start_time=round(start_sec, 3),
-                    end_time=round(end_sec, 3),
-                    type="dialogue",
-                    text_content=content,
-                ).model_dump()
-            )
+            temporal_segments.append({"start": start_sec, "end": end_sec, "type": "dialogue"})
             last_time = end_sec
 
         # Tail Gap
-        if last_time < video_duration and (video_duration - last_time) >= MIN_VISUAL_DURATION:
-            slices.append(
-                VisualSliceItem(
-                    slice_id=0,
-                    start_time=round(last_time, 3),
-                    end_time=round(video_duration, 3),
-                    type="visual_segment",
-                    text_content=None,
-                ).model_dump()
-            )
+        if last_time < video_duration:
+            temporal_segments.append({"start": last_time, "end": video_duration, "type": "visual_segment"})
 
-        for idx, s in enumerate(slices):
-            s["slice_id"] = idx + 1
-        return slices
+        # --- 步骤 2: 创建容器骨架 (Skeleton Creation) ---
+        multimodal_slices = []
+        for i, seg in enumerate(temporal_segments):
+            slice_obj = MultimodalSlice(
+                slice_id=i + 1,
+                start_time=round(seg["start"], 3),
+                end_time=round(seg["end"], 3),
+                type=seg["type"],
+            )
+            multimodal_slices.append(slice_obj)
+
+        # --- 步骤 3: 填充文本内容 (Text Hydration) ---
+        # 预处理原始字幕，方便快速查找
+        subtitle_map = {item["index"]: item for item in original_dialogue_track}  # noqa: F841
+
+        for m_slice in multimodal_slices:
+            if m_slice.type == "dialogue":
+                # 筛选出时间戳落在该切片内的所有原始字幕行
+                contained_subtitles = []
+                for sub_item_data in original_dialogue_track:
+                    sub_start = sub_item_data.get("start_time", 0)
+                    if m_slice.start_time <= sub_start < m_slice.end_time:
+                        # 使用 Pydantic 模型进行校验和实例化
+                        contained_subtitles.append(SubtitleItem(**sub_item_data))
+
+                m_slice.text_contents = contained_subtitles
+
+        # 返回序列化后的字典列表
+        return [s.model_dump() for s in multimodal_slices]

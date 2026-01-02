@@ -1,4 +1,4 @@
-from ...schemas import VisualSliceItem
+from ...schemas import MultimodalSlice
 
 
 class SlicingContextMixin:
@@ -14,7 +14,7 @@ class SlicingContextMixin:
 
     def _handle_slicing(self, target, result):
         raw_slices = result.get("slices", [])
-        target.visual_slices = [VisualSliceItem(**s).model_dump() for s in raw_slices]
+        target.visual_slices = [MultimodalSlice(**s).model_dump() for s in raw_slices]
 
     def _check_slicing_ready(self, target):
         return bool(target.proxy_video) and bool(target.dialogue_track)
