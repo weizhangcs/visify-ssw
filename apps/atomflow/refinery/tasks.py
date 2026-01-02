@@ -101,8 +101,24 @@ def _dispatch_service(op_slug: str, payload: dict, target_id: str) -> dict:
         abs_proxy_path = Path(payload["proxy_path"])
         duration = payload["duration"]
         dialogue_track = payload["dialogue_track"]
+        waveform_data = payload.get("waveform_data", [])
 
-        slices = SlicingService.run(abs_proxy_path, duration, dialogue_track)
+        # Extract optional configs from payload if they exist
+        scene_threshold = payload.get("scene_threshold", 0.3)
+        dialogue_gap = payload.get("dialogue_gap", 1.0)
+        max_pad = payload.get("max_pad", 0.5)
+        silence_thresh = payload.get("silence_thresh", 0.02)
+
+        slices = SlicingService.run(
+            abs_proxy_path,
+            duration,
+            dialogue_track,
+            waveform_data,
+            scene_threshold=scene_threshold,
+            dialogue_gap=dialogue_gap,
+            max_pad=max_pad,
+            silence_thresh=silence_thresh,
+        )
         return {"slices": slices}
 
     elif op_slug == "frame_extract":

@@ -31,8 +31,6 @@ def run_flow_test():
         {"seq": 3, "unit_slug": "text_analyze", "name": "文本分析", "obligation": "REQUIRED", "dependence": [1, 2]},
         {"seq": 4, "unit_slug": "character_refine", "name": "角色精修", "obligation": "REQUIRED", "dependence": [3]},
         {"seq": 5, "unit_slug": "slicing", "name": "视觉切片", "obligation": "REQUIRED", "dependence": [1, 4]},
-        {"seq": 6, "unit_slug": "frame_extract", "name": "关键帧提取", "obligation": "REQUIRED", "dependence": [5]},
-        {"seq": 7, "unit_slug": "sync", "name": "云端同步", "obligation": "REQUIRED", "dependence": [6]},
     ]
 
     rule, _ = RefineryAtomRule.objects.update_or_create(

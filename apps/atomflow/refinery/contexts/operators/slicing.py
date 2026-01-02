@@ -9,6 +9,7 @@ class SlicingContextMixin:
             "proxy_path": str(abs_proxy_path),
             "duration": target.duration,
             "dialogue_track": target.dialogue_track,
+            "waveform_data": target.waveform_data,
         }
 
     def _handle_slicing(self, target, result):

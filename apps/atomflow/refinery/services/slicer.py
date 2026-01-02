@@ -12,27 +12,44 @@ logger = logging.getLogger(__name__)
 
 class SlicingService:
     @staticmethod
-    def run(video_path: Path, video_duration: float, dialogue_track: List[Dict]) -> List[Dict]:
+    def run(
+        video_path: Path,
+        video_duration: float,
+        dialogue_track: List[Dict],
+        waveform_data: List[float],
+        # Optional Configs (Default values)
+        scene_threshold: float = 0.3,
+        dialogue_gap: float = 1.0,
+        max_pad: float = 0.5,
+        silence_thresh: float = 0.02,
+    ) -> List[Dict]:
         """
         [物理算子] 视觉切片逻辑
-        职责：1. 镜头探测 2. 时间轴合并算法
+        职责：1. 镜头探测 2. 对白分组与Padding 3. 时间轴全覆盖切分
         输入：视频路径, 视频时长, 对白列表
         输出：切片清单 (List[Dict])
         """
         # 1. 物理执行：镜头变更探测 (基于 FFmpeg)
-        scene_changes = SlicingService._detect_scene_changes(video_path)
+        scene_changes = SlicingService._detect_scene_changes(video_path, threshold=scene_threshold)
 
-        # 2. 纯逻辑执行：区间合并算法
+        # 2. 逻辑执行：对白分组 (合并紧凑对话)
+        grouped_dialogues = SlicingService._group_dialogues(dialogue_track, gap_threshold=dialogue_gap)
+
+        # 3. 逻辑执行：基于声纹的动态 Padding (呼吸感)
+        padded_dialogues = SlicingService._apply_waveform_padding(
+            grouped_dialogues, waveform_data, video_duration, max_pad=max_pad, silence_thresh=silence_thresh
+        )
+
+        # 4. 纯逻辑执行：区间合并算法 (全覆盖)
         slices_manifest = SlicingService._compute_slices_logic(
-            video_duration=video_duration, scene_changes=scene_changes, dialogue_track=dialogue_track
+            video_duration=video_duration, scene_changes=scene_changes, dialogue_track=padded_dialogues
         )
 
         return slices_manifest
 
     @staticmethod
-    def _detect_scene_changes(video_path: Path) -> List[float]:
+    def _detect_scene_changes(video_path: Path, threshold: float = 0.3) -> List[float]:
         """[物理镜像] 使用 ffmpeg 探测视觉转场点"""
-        threshold = 0.3
         filter_chain = f"[0:v]select='gt(scene,{threshold})',showinfo[outv]"  # noqa: E231
         cmd = ["ffmpeg", "-i", str(video_path), "-filter_complex", filter_chain, "-map", "[outv]", "-f", "null", "-"]
 
@@ -54,20 +71,114 @@ class SlicingService:
             raise RuntimeError(f"FFmpeg Scene Detection Failed: {e.stderr}")
 
     @staticmethod
+    def _group_dialogues(dialogue_track: List[Dict], gap_threshold: float = 1.0) -> List[Dict]:
+        """[逻辑] 将间隔小于 gap_threshold 的对白合并为一个切片"""
+        if not dialogue_track:
+            return []
+
+        # 字段名修正：对齐 SubtitleItem Schema
+        sorted_track = sorted(dialogue_track, key=lambda x: x.get("start_time", 0))
+        groups = []
+
+        # 初始化第一个组
+        current_group = sorted_track[0].copy()
+        # 格式化 content，保留说话人信息
+        spk = current_group.get("speaker", "Unknown")
+        txt = current_group.get("content", "")
+        current_group["content"] = f"[{spk}]: {txt}"
+
+        for next_item in sorted_track[1:]:
+            gap = next_item.get("start_time", 0) - current_group.get("end_time", 0)
+
+            # 阈值：1.0秒内的对话视为连续
+            if gap < gap_threshold:
+                # 合并
+                current_group["end_time"] = next_item.get("end_time", 0)
+                next_spk = next_item.get("speaker", "Unknown")
+                next_txt = next_item.get("content", "")
+                # 追加文本
+                current_group["content"] += f"\n[{next_spk}]: {next_txt}"
+            else:
+                # 封存当前组，开启新组
+                groups.append(current_group)
+                current_group = next_item.copy()
+                current_group[
+                    "content"
+                ] = f"[{current_group.get('speaker', 'Unknown')}]: {current_group.get('content', '')}"
+
+        groups.append(current_group)
+        return groups
+
+    @staticmethod
+    def _apply_waveform_padding(
+        groups: List[Dict],
+        waveform: List[float],
+        duration: float,
+        max_pad: float = 0.5,
+        silence_thresh: float = 0.02,
+    ) -> List[Dict]:
+        """[逻辑] 基于声纹数据的动态 Padding (呼吸感)"""
+        if not waveform or duration <= 0:
+            return groups
+
+        # 计算声纹采样率 (ProbeService 默认 chunk_size=100, ar=8000 -> 80 peaks/sec)
+        peaks_per_sec = len(waveform) / duration
+
+        for i, group in enumerate(groups):
+            start = group["start_time"]
+            end = group["end_time"]
+
+            # 1. 向前扩展 (Start Padding)
+            # 限制：不能超过上一句的结束
+            prev_end = groups[i - 1]["end_time"] if i > 0 else 0.0
+            pad_start = 0.0
+            # 步进扫描，直到遇到静音或达到最大值
+            while pad_start < max_pad:
+                check_time = start - pad_start - 0.05
+                if check_time < prev_end:
+                    break
+                idx = int(check_time * peaks_per_sec)
+                if 0 <= idx < len(waveform) and waveform[idx] < silence_thresh:
+                    # 遇到静音，停止扩展（保留这部分静音作为呼吸空间）
+                    pad_start += 0.05
+                    break
+                pad_start += 0.05
+
+            group["start_time"] = max(prev_end, start - pad_start)
+
+            # 2. 向后扩展 (End Padding)
+            # 限制：不能超过下一句的开始
+            next_start = groups[i + 1]["start_time"] if i < len(groups) - 1 else duration
+            pad_end = 0.0
+            while pad_end < max_pad:
+                check_time = end + pad_end + 0.05
+                if check_time > next_start:
+                    break
+                idx = int(check_time * peaks_per_sec)
+                if 0 <= idx < len(waveform) and waveform[idx] < silence_thresh:
+                    pad_end += 0.05
+                    break
+                pad_end += 0.05
+
+            group["end_time"] = min(next_start, end + pad_end)
+
+        return groups
+
+    @staticmethod
     def _compute_slices_logic(
         video_duration: float, scene_changes: List[float], dialogue_track: List[Dict]
     ) -> List[Dict]:
         """[纯算法] 核心时间轴合并逻辑 (代码逻辑同原版，仅去除依赖)"""
-        MIN_VISUAL_DURATION = 2.0
+        # [Fix] 移除最小阈值，实现全覆盖
+        MIN_VISUAL_DURATION = 0.0
         slices = []
         last_time = 0.0
-        # [Fix] 字段名修正：对齐 SubtitleItem Schema (start -> start_time)
-        sorted_dialogues = sorted(dialogue_track, key=lambda x: x.get("start_time", 0))
 
-        for entry in sorted_dialogues:
-            # [Fix] 字段名修正：start -> start_time, end -> end_time, text -> content
+        # dialogue_track 已经是经过分组和 Padding 的数据
+        for entry in dialogue_track:
             start_sec, end_sec = float(entry.get("start_time", 0)), float(entry.get("end_time", 0))
-            text, speaker = entry.get("content", ""), entry.get("speaker", "Unknown")
+            # content 已经包含了 speaker 信息
+            content = entry.get("content", "")
 
             # Gap Filling
             if start_sec > last_time and (start_sec - last_time) >= MIN_VISUAL_DURATION:
@@ -102,7 +213,7 @@ class SlicingService:
                     start_time=round(start_sec, 3),
                     end_time=round(end_sec, 3),
                     type="dialogue",
-                    text_content=f"[{speaker}]: {text}",
+                    text_content=content,
                 ).model_dump()
             )
             last_time = end_sec
