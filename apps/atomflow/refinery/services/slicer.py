@@ -61,11 +61,13 @@ class SlicingService:
         MIN_VISUAL_DURATION = 2.0
         slices = []
         last_time = 0.0
-        sorted_dialogues = sorted(dialogue_track, key=lambda x: x.get("start", 0))
+        # [Fix] 字段名修正：对齐 SubtitleItem Schema (start -> start_time)
+        sorted_dialogues = sorted(dialogue_track, key=lambda x: x.get("start_time", 0))
 
         for entry in sorted_dialogues:
-            start_sec, end_sec = float(entry.get("start", 0)), float(entry.get("end", 0))
-            text, speaker = entry.get("text", ""), entry.get("speaker", "Unknown")
+            # [Fix] 字段名修正：start -> start_time, end -> end_time, text -> content
+            start_sec, end_sec = float(entry.get("start_time", 0)), float(entry.get("end_time", 0))
+            text, speaker = entry.get("content", ""), entry.get("speaker", "Unknown")
 
             # Gap Filling
             if start_sec > last_time and (start_sec - last_time) >= MIN_VISUAL_DURATION:
