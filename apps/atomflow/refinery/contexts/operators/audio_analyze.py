@@ -1,5 +1,21 @@
 class AudioAnalyzeContextMixin:
+    """
+    Context Mixin for audio analysis.
+
+    Provides methods to generate payloads for and handle results from the AudioAnalyzerService.
+    """
+
     def _payload_audio_analyze(self, target):
+        """
+        Generate payload for the AudioAnalyzerService.
+
+        Args:
+            target: The Material instance.
+
+        Returns:
+            A dictionary containing the video path (for audio extraction) and
+            the dialogue track to be analyzed.
+        """
         proxy_rel = target.proxy_video
         abs_proxy_path = self.media_root / proxy_rel
 
@@ -9,12 +25,39 @@ class AudioAnalyzeContextMixin:
         }
 
     def _handle_audio_analyze(self, target, result):
+        """
+        Handle the result from the AudioAnalyzerService.
+
+        Updates the Material's dialogue_track with the audio analysis results.
+
+        Args:
+            target: The Material instance.
+            result: A dictionary containing the updated 'dialogue_track'.
+        """
         target.dialogue_track = result.get("dialogue_track", [])
 
     def _check_audio_analyze_ready(self, target):
+        """
+        Check if the Audio Analyze task is ready to run.
+
+        Args:
+            target: The Material instance.
+
+        Returns:
+            True if proxy video and dialogue track exist, False otherwise.
+        """
         return bool(target.proxy_video) and bool(target.dialogue_track)
 
     def _check_audio_analyze_done(self, target):
+        """
+        Check if the Audio Analyze task has already been completed.
+
+        Args:
+            target: The Material instance.
+
+        Returns:
+            True if at least one item in the dialogue track has audio analysis data.
+        """
         if not target.dialogue_track:
             return False
         # Check if at least one item has audio_analysis

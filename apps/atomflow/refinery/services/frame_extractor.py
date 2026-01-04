@@ -13,17 +13,32 @@ logger = logging.getLogger(__name__)
 
 
 class FrameExtractorService:
+    """
+    [物理算子] 关键帧提取服务。
+
+    职责：
+    1. 接收视觉切片列表。
+    2. 对每个切片进行智能抽帧 (首尾帧 + 内部变化帧)。
+    3. 使用 FFmpeg 提取物理图片文件。
+    4. 计算文件摘要 (Digest)。
+    5. 返回结构化的关键帧映射表 (keyframe_map)。
+    """
+
     @staticmethod
     def run(video_path: Path, slices: List[Dict], abs_output_dir: Path, rel_output_dir: Path) -> Dict[str, List[Dict]]:
         """
-        [物理算子] 大规模抽帧
-        输入：
-            video_path: Proxy 绝对路径
-            slices: 切片清单 (JSONB 结构)
-            abs_output_dir: 图片存储的物理绝对路径
-            rel_output_dir: 存入数据库的相对路径前缀
+        执行大规模抽帧任务。
+
+        Args:
+            video_path: 视频文件路径 (Proxy)。
+            slices: 切片清单 (List[MultimodalSlice.model_dump()])。
+            abs_output_dir: 图片存储的物理绝对路径。
+            rel_output_dir: 存入数据库的相对路径前缀。
+
+        Returns:
+            keyframe_map: 字典，Key 为 slice_id (str)，Value 为 FrameDataInput 列表。
         """
-        abs_output_dir.mkdir(parents=True, exist_ok=True)  # 确保输出目录存在
+        abs_output_dir.mkdir(parents=True, exist_ok=True)
         total = len(slices)
         logger.info(f"Frame Extraction Start: {total} slices from {video_path.name}")
 
@@ -46,8 +61,12 @@ class FrameExtractorService:
                 except Exception as e:
                     logger.error(f"Frame Extraction Failed for slice index {index}: {str(e)}")
                     # 失败则返回空列表，不阻断其他切片
-                    slice_id_str = MultimodalSlice(**slices[index]).slice_id
-                    results_map[str(slice_id_str)] = []
+                    # 尝试从原始数据中恢复 slice_id 以保持 map 结构完整
+                    try:
+                        slice_id_str = str(MultimodalSlice(**slices[index]).slice_id)
+                        results_map[slice_id_str] = []
+                    except Exception:
+                        pass
 
                 completed += 1
                 if completed % 50 == 0 or completed == total:
@@ -62,13 +81,28 @@ class FrameExtractorService:
         video_path: Path, slice_data: Dict, abs_dir: Path, rel_dir: Path
     ) -> Tuple[str, List[Dict]]:
         """
-        [核心重构] 智能抽帧逻辑：根据切片内容动态决定抽帧策略
+        [内部方法] 处理单个切片的抽帧逻辑。
+
+        策略：
+        1. 总是抽取切片的首帧。
+        2. 如果切片长度 > 1s，抽取尾帧。
+        3. 使用 ffmpeg select 过滤器检测内部显著变化点，并抽取。
+        4. 如果无内部变化且切片较长 (> 2s)，抽取中间帧保底。
+
+        Args:
+            video_path: 视频路径。
+            slice_data: 单个切片数据。
+            abs_dir: 输出目录。
+            rel_dir: 相对路径前缀。
+
+        Returns:
+            (slice_id_str, List[FrameDataInput.model_dump()])
         """
-        slice_obj = MultimodalSlice(**slice_data)  # 确保数据结构正确
+        slice_obj = MultimodalSlice(**slice_data)
 
         start_time = slice_obj.start_time
         end_time = slice_obj.end_time
-        slice_id_str = str(slice_obj.slice_id)  # keyframe_map 的键是字符串
+        slice_id_str = str(slice_obj.slice_id)
 
         # 1. 检测切片内部的视觉变化点
         internal_changes = FrameExtractorService._detect_internal_visual_changes(video_path, start_time, end_time)
@@ -78,7 +112,7 @@ class FrameExtractorService:
 
         # 总是抽取首帧和尾帧 (如果切片足够长)
         frame_timestamps.append({"time": start_time, "reason": "slice_boundary"})
-        if end_time - start_time > 1.0:  # 避免过短切片重复抽帧
+        if end_time - start_time > 1.0:
             frame_timestamps.append({"time": end_time, "reason": "slice_boundary"})
 
         # 加入内部变化点
@@ -90,12 +124,12 @@ class FrameExtractorService:
             mid_time = (start_time + end_time) / 2
             frame_timestamps.append({"time": mid_time, "reason": "fallback_mid"})
 
-        # 去重并排序 (时间点可能重复)
+        # 去重并排序
         unique_frames_to_extract = sorted(
             list({(round(f["time"], 3), f["reason"]) for f in frame_timestamps}), key=lambda x: x[0]
         )
 
-        extracted_frame_inputs = []  # 存储 FrameDataInput
+        extracted_frame_inputs = []
         for i, (timestamp, reason) in enumerate(unique_frames_to_extract):
             file_name = f"slice_{slice_obj.slice_id:04d}_{reason}_{i:02d}.jpg"  # noqa: E231
             abs_path = abs_dir / file_name
@@ -110,26 +144,24 @@ class FrameExtractorService:
                 "-frames:v",
                 "1",
                 "-color_range",
-                "tv",  # 明确指定颜色范围为电视标准，处理非标准YUV输入
+                "tv",
                 "-pix_fmt",
-                "yuvj420p",  # 明确输出像素格式为JPEG兼容的YUV420P
+                "yuvj420p",
                 "-q:v",
-                "4",  # 质量参数，1-5，1最好
+                "4",
                 "-y",
                 str(abs_path),
             ]
 
             try:
-                subprocess.run(cmd, capture_output=True, check=True, timeout=30)  # 增加超时时间
+                subprocess.run(cmd, capture_output=True, check=True, timeout=30)
 
-                # [Fix] 验证 FFmpeg 是否成功生成了文件，处理视频末尾抽帧失败的边缘情况
                 if not abs_path.exists():
                     logger.warning(
-                        f"FFmpeg did not produce an output file for slice {slice_id_str} at {timestamp}s. Skipping this frame."  # noqa: E501
+                        f"FFmpeg did not produce an output file for slice {slice_id_str} at {timestamp}s. Skipping."
                     )
                     continue
 
-                # [New] 计算文件摘要 (MD5)
                 digest = FrameExtractorService._calculate_file_hash(abs_path)
 
                 extracted_frame_inputs.append(
@@ -144,16 +176,21 @@ class FrameExtractorService:
                 logger.error(f"FFmpeg Error for slice {slice_id_str} at {timestamp}s: {error_msg}")
             except Exception as e:
                 logger.error(f"Frame Extraction Unexpected Error for slice {slice_id_str} at {timestamp}s: {str(e)}")
-            # 即使单帧失败，也继续循环处理其他帧
 
-        # 返回 slice_id 和其对应的 FrameDataInput 列表
         return slice_id_str, extracted_frame_inputs
 
     @staticmethod
     def _detect_internal_visual_changes(video_path: Path, start_time: float, end_time: float) -> List[float]:
         """
-        使用 ffmpeg select 过滤器检测切片内部的场景变化点。
-        阈值比 Slicer 更敏感，以捕捉更多细节。
+        [内部方法] 使用 ffmpeg select 过滤器检测切片内部的场景变化点。
+
+        Args:
+            video_path: 视频路径。
+            start_time: 检测起始时间。
+            end_time: 检测结束时间。
+
+        Returns:
+            变化点时间戳列表 (绝对时间)。
         """
         # 阈值 0.1 比 Slicer 的 0.3 更敏感，用于捕捉切片内部的微小变化
         threshold = 0.3
@@ -162,9 +199,9 @@ class FrameExtractorService:
         cmd = [
             "ffmpeg",
             "-ss",
-            str(start_time),  # 从切片开始时间开始检测
+            str(start_time),
             "-to",
-            str(end_time),  # 到切片结束时间结束检测
+            str(end_time),
             "-i",
             str(video_path),
             "-vf",
@@ -174,7 +211,7 @@ class FrameExtractorService:
             "-",
         ]
 
-        try:  # 增加超时时间
+        try:
             result = subprocess.run(cmd, capture_output=True, text=True, check=True, encoding="utf-8", errors="ignore")
 
             timestamps = []
@@ -183,8 +220,7 @@ class FrameExtractorService:
                     match = re.search(r"pts_time:([0-9.]+)", line)
                     if match:
                         t_rel = float(match.group(1))
-                        t_abs = start_time + t_rel  # [Fix] 将相对时间转换为绝对时间
-                        # 确保时间戳在切片内部，避免边界误差
+                        t_abs = start_time + t_rel
                         if start_time < t_abs < end_time:
                             timestamps.append(t_abs)
 
@@ -192,14 +228,15 @@ class FrameExtractorService:
         except subprocess.CalledProcessError as e:
             error_msg = e.stderr.decode() if e.stderr else "FFmpeg error (no details)"
             logger.warning(f"FFmpeg Internal Scene Detection Failed for slice ({start_time}-{end_time}s): {error_msg}")
-            return []  # 不阻断流程，返回空列表
+            return []
 
     @staticmethod
     def _calculate_file_hash(file_path: Path, algorithm: str = "md5") -> str:
-        """计算文件的哈希摘要"""
+        """
+        [内部方法] 计算文件的哈希摘要。
+        """
         hash_func = getattr(hashlib, algorithm)()
         with open(file_path, "rb") as f:
-            # 分块读取，虽然图片很小，但保持好习惯
             for chunk in iter(lambda: f.read(4096), b""):
                 hash_func.update(chunk)
         return hash_func.hexdigest()

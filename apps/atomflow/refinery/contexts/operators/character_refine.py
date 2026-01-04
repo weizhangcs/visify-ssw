@@ -1,5 +1,20 @@
 class CharacterRefineContextMixin:
+    """
+    Context Mixin for character refinement via Cloud LLM.
+
+    Provides methods to generate payloads for and handle results from the CharacterRefinerService.
+    """
+
     def _payload_character_refine(self, target):
+        """
+        Generate payload for the CharacterRefinerService.
+
+        Args:
+            target: The Material instance.
+
+        Returns:
+            A dictionary containing the dialogue track and asset metadata.
+        """
         asset = getattr(target.media, "asset", None)
         lang = "zh"
         if asset and asset.language:
@@ -13,9 +28,20 @@ class CharacterRefineContextMixin:
         }
 
     def _handle_character_refine(self, target, result):
+        """
+        Handle the result from the CharacterRefinerService.
+
+        Merges the incremental updates (speaker, reasoning) from the result
+        into the existing dialogue track.
+
+        Args:
+            target: The Material instance.
+            result: A dictionary containing a list of 'updates'.
+        """
         updates = result.get("updates", [])
         original_track = target.dialogue_track
 
+        # Create a map for efficient lookups
         updates_map = {u.get("index"): u for u in updates if "index" in u}
 
         merged_track = []
@@ -35,9 +61,31 @@ class CharacterRefineContextMixin:
         target.dialogue_track = merged_track
 
     def _check_character_refine_ready(self, target):
+        """
+        Check if the Character Refine task is ready to run.
+
+        Args:
+            target: The Material instance.
+
+        Returns:
+            True if the dialogue track is populated, False otherwise.
+        """
         return bool(target.dialogue_track)
 
     def _check_character_refine_done(self, target):
+        """
+        Check if the Character Refine task has already been completed.
+
+        This check relies on the Pipeline's metrics, as it's difficult to
+        determine completion status from the data alone (e.g., 'Unknown'
+        could be a valid result).
+
+        Args:
+            target: The Material instance.
+
+        Returns:
+            True if the pipeline metrics show a successful run for this slug.
+        """
         pipeline = self.pipeline
         if not pipeline or not pipeline.metrics:
             return False

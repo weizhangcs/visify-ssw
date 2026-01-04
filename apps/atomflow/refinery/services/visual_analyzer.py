@@ -11,9 +11,13 @@ logger = logging.getLogger(__name__)
 
 class VisualAnalyzerService:
     """
-    [Refinery Operator] 视觉分析算子 (Cloud VLM)
+    [Refinery Operator] 视觉分析算子 (Cloud VLM)。
+
     职责：
-    调用 Cloud VISUAL_ANALYZER 接口，对帧列表进行分析。
+    1. 接收待分析的帧列表 (已同步到云端的路径)。
+    2. 构造 Cloud API 请求 Payload。
+    3. 调用 Cloud VISUAL_ANALYZER 接口。
+    4. 等待任务完成并下载分析结果。
     """
 
     @staticmethod
@@ -25,11 +29,20 @@ class VisualAnalyzerService:
         temp_file_path: Path,
     ) -> Dict[str, Any]:
         """
-        :param client: CloudApiService 实例
-        :param frames: [{"frame_id": "...", "path": "...", "digest": "..."}]
-        :param lang: "zh" or "en"
-        :param visual_model: 模型名称
-        :param temp_file_path: 临时文件路径，用于存储 frames 数据
+        执行视觉分析任务。
+
+        Args:
+            client: CloudApiService 实例。
+            frames: 帧列表，格式 [{"frame_id": "...", "path": "gs://...", "digest": "..."}]。
+            lang: 目标语言代码 ("zh" or "en")。
+            visual_model: 使用的 VLM 模型名称。
+            temp_file_path: 用于存储 frames 数据的临时文件路径。
+
+        Returns:
+            分析结果字典 (包含 annotated_frames 列表)。
+
+        Raises:
+            RuntimeError: 如果任务创建、执行或下载失败。
         """
         if not frames:
             return {}
@@ -46,7 +59,7 @@ class VisualAnalyzerService:
         if not success:
             raise RuntimeError(f"VisualAnalyzer: Failed to upload frames file - {upload_rel_path}")
 
-        # 3. 构造任务 Payload (生产模式：引用文件)
+        # 3. 构造任务 Payload
         payload = {
             "lang": lang,
             "visual_model": visual_model,
@@ -70,7 +83,6 @@ class VisualAnalyzerService:
         result = final_data.get("result", {})
 
         # Case A: 结果包含 download_url (推荐)
-        # [Fix] download_url is at the top level of the task response, not inside the 'result' object.
         download_url = final_data.get("download_url")
         if download_url:
             dl_success, content_bytes = client.download_task_result(download_url)
@@ -80,7 +92,7 @@ class VisualAnalyzerService:
             logger.info(f"VisualAnalyzer: Downloaded result keys: {list(data.keys())}")
             return data
 
-        # Case B: 结果直接在 payload 中
+        # Case B: 结果直接在 payload 中 (通常用于调试或小数据量)
         if "annotated_frames" in result:
             return result
 

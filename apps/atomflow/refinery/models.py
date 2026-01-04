@@ -9,8 +9,11 @@ from apps.common.atomflow.base_models import BaseAtomflowRule, BaseAtomPipeline,
 
 class RefineryAtomUnit(BaseAtomUnit):
     """
-    [能力层] 精炼算子定义
-    具体算子实现逻辑在 apps.atomflow.refinery.context.RefineryAtomicContext 中
+    [能力层] 精炼算子定义模型。
+
+    用于在数据库中注册和管理具体的原子算子（如 transcode, probe 等）。
+    具体的算子执行逻辑封装在 apps.atomflow.refinery.context.RefineryAtomicContext 中，
+    或者通过 apps.atomflow.refinery.services 下的独立 Service 实现。
     """
 
     # 显式指定 UUID 作为主键
@@ -26,8 +29,11 @@ class RefineryAtomUnit(BaseAtomUnit):
 
 class RefineryAtomRule(BaseAtomflowRule):
     """
-    [逻辑层] 精炼编排规则
-    定义了从 Raw Media 到 Refined Material 的具体工序 (如: Transcode -> Probe -> Slicing)
+    [逻辑层] 精炼编排规则模型。
+
+    定义了从 Raw Media 到 Refined Material 的具体工序流程。
+    例如：Transcode -> Probe -> Slicing -> Frame Extraction -> Visual Analysis。
+    规则配置存储在 rules_config JSON 字段中。
     """
 
     # 显式指定 UUID 作为主键
@@ -43,22 +49,25 @@ class RefineryAtomRule(BaseAtomflowRule):
 
 class RefineryAtomPipeline(BaseAtomPipeline):
     """
-    [实例层] 精炼执行轨迹
-    记录某一个 Material 在某一个 Rule 下的执行状态与历史
+    [实例层] 精炼执行轨迹模型。
+
+    记录某一个 Material 在某一个 Rule 下的执行状态与历史（Metrics）。
+    它是连接 Material（数据）和 Rule（逻辑）的桥梁，负责维护流程状态（PENDING, RUNNING, SUCCESS, FAILED）。
     """
 
     # 显式指定 UUID 作为主键
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
 
     # 关联具体的业务对象 (Material)
-    # 这里我们保留 target_id 作为通用接口
+    # 这里我们保留 target_id 作为通用接口，方便基类或其他组件引用
     target_id = models.CharField(max_length=64, db_index=True, verbose_name="关联物料ID")
 
     # [修正] 使用 OneToOneField 强制 1:1 关系
+    # 确保一个 Material 在同一时间只能关联一个活跃的 Pipeline
     material = models.OneToOneField(
         "Material",
         on_delete=models.CASCADE,
-        related_name="pipeline",  # 单数形式
+        related_name="pipeline",  # 单数形式，强调 1:1
         verbose_name="关联物料",
         null=True,
         blank=True,
@@ -77,9 +86,10 @@ class RefineryAtomPipeline(BaseAtomPipeline):
 class Material(TimeStampedModel):
     """
     [精炼物料] (The Refined Material)
+
     定位：Atomflow Refinery 的核心产出容器。
     职责：持有所有标准化的生产介质、结构化文本和视觉索引。
-    注意：它不再维护状态 (Status)，状态由 Pipeline 接管。
+    注意：它不再维护状态 (Status)，状态由关联的 RefineryAtomPipeline 接管。
     """
 
     # --- 1. 身份与关联 ---
@@ -98,9 +108,13 @@ class Material(TimeStampedModel):
     # --- 3. 结构化生产数据 (Structured Data) ---
     dialogue_track = models.JSONField(default=list, blank=True, verbose_name=_("结构化对白数据"))
     visual_slices = models.JSONField(default=list, blank=True, verbose_name=_("视觉切片索引"))
+
+    # 关键帧映射表：存储所有关键帧的元数据（本地路径、云端路径、分析结果等）
+    # 结构参考 schemas.FrameDataInput
     keyframe_map = models.JSONField(default=dict, blank=True, verbose_name=_("关键帧映射表"))
 
     # --- 4. 云端锚点 (Cloud Anchors) ---
+    # 记录同步到 GCS/S3 后的路径，供下游 Inference 直接引用
     cloud_proxy_path = models.CharField(max_length=1024, blank=True, null=True)
     cloud_slices_path = models.CharField(max_length=1024, blank=True, null=True)
     cloud_dialogue_path = models.CharField(max_length=1024, blank=True, null=True)

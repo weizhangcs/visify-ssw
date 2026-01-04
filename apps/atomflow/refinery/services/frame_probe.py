@@ -11,16 +11,31 @@ logger = logging.getLogger(__name__)
 
 
 class FrameProbeService:
+    """
+    [分析算子] 帧质量探测服务 (L0 特征)。
+
+    职责：
+    1. 检查物理帧文件是否存在。
+    2. 计算帧的模糊度 (Laplacian Variance)。
+    3. 检测黑帧/白帧。
+    4. 更新 FrameDataInput 中的 quality_score 和 filter_reason。
+    """
+
     @staticmethod
     def run(keyframe_map: Dict[str, List[Dict]], media_root: Path) -> Dict[str, List[Dict]]:
         """
-        [分析算子] 帧质量过滤 (L0 特征)
-        输入：keyframe_map (包含 FrameDataInput 列表)
-        输出：更新 quality_score 和 filter_reason 的 keyframe_map (在 FrameDataInput 中)
+        执行帧探测任务。
+
+        Args:
+            keyframe_map: 关键帧映射表 (Slice ID -> FrameDataInput List)。
+            media_root: 媒体文件根目录 (用于拼接绝对路径)。
+
+        Returns:
+            更新后的 keyframe_map。
         """
         logger.info(f"Frame Probe Start: {len(keyframe_map)} slices in keyframe_map to analyze.")
 
-        # [Fix] 内容缓存：基于 Digest 去重，避免对相同内容的图片重复计算
+        # 内容缓存：基于 Digest 去重，避免对相同内容的图片重复计算
         # digest (or path) -> (quality_score, filter_reason)
         processed_cache = {}
 
@@ -32,12 +47,12 @@ class FrameProbeService:
                 frame = FrameDataInput(**frame_data_dict)
                 abs_path = media_root / frame.path
 
-                # [Fix] 如果路径已经是云端路径 (gs:// 或 http://)，说明已同步，跳过本地探测
+                # 如果路径已经是云端路径 (gs:// 或 http://)，说明已同步，跳过本地探测
                 if frame.path.startswith(("gs://", "http")):
                     updated_frames_for_slice.append(frame.model_dump())
                     continue
 
-                # [Fix] 严格使用 digest 作为唯一的缓存和去重键
+                # 严格使用 digest 作为唯一的缓存和去重键
                 cache_key = frame.digest
 
                 # 1. 检查缓存
@@ -51,16 +66,16 @@ class FrameProbeService:
                     frame.quality_score = 0.0  # 标记为低质量
                     frame.filter_reason = "file_not_found"
                     updated_frames_for_slice.append(frame.model_dump())
-                    continue  # 继续处理下一个帧
+                    continue
 
                 try:
                     img = cv2.imread(str(abs_path))
                     if img is None:
                         logger.warning(f"Could not read image: {abs_path}")
-                        frame.quality_score = 0.0  # 标记为低质量
+                        frame.quality_score = 0.0
                         frame.filter_reason = "image_read_error"
                         updated_frames_for_slice.append(frame.model_dump())
-                        continue  # 继续处理下一个帧
+                        continue
 
                     # 2. 模糊度 (Laplacian Variance)
                     gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
@@ -104,7 +119,18 @@ class FrameProbeService:
     def _is_black_or_white_frame(
         gray_img: np.ndarray, black_thresh=10, white_thresh=245, std_thresh=5
     ) -> Tuple[bool, bool]:
-        """通过均值和标准差检测黑/白帧"""
+        """
+        [内部方法] 通过均值和标准差检测黑/白帧。
+
+        Args:
+            gray_img: 灰度图像 (numpy array)。
+            black_thresh: 黑帧均值阈值。
+            white_thresh: 白帧均值阈值。
+            std_thresh: 标准差阈值 (用于判断是否纯色)。
+
+        Returns:
+            (is_black, is_white)
+        """
         mean = gray_img.mean()
         std = gray_img.std()
 

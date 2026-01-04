@@ -5,7 +5,27 @@ from ...schemas import FrameDataInput
 
 
 class SyncContextMixin:
+    """
+    Context Mixin for synchronizing local files to cloud storage.
+
+    Handles the preparation of file lists for upload and updates the
+    Material's keyframe_map with cloud URLs after successful synchronization.
+    """
+
     def _payload_sync(self, target):
+        """
+        Generate payload for the SyncService (TicketUploader).
+
+        Collects local file paths from the keyframe_map, filtering out
+        low-quality frames and deduplicating based on file digests.
+
+        Args:
+            target: The Material instance.
+
+        Returns:
+            A dictionary containing a list of absolute file paths to upload,
+            the asset ID, and the material ID.
+        """
         asset_id = (
             str(target.media.asset.id) if hasattr(target.media, "asset") else "00000000-0000-0000-0000-000000000000"
         )
@@ -13,20 +33,21 @@ class SyncContextMixin:
         files_to_upload = []
         seen_digests = set()
 
-        # [Fix] 从 keyframe_map 中获取要上传的帧路径
+        # Collect frame paths from keyframe_map
         if target.keyframe_map:
             for slice_id, frames_list_dict in target.keyframe_map.items():
                 for frame in frames_list_dict:
-                    # 1. Quality Filter: 过滤掉质量分低或为0的帧
+                    # 1. Quality Filter: Skip frames with low or zero quality score
                     q_score = frame.get("quality_score")
                     if q_score is not None and q_score <= 0.0:
                         continue
 
                     rel_path = frame.get("path")
+                    # Only upload if it's a local path (not starting with http or gs://)
                     if rel_path and not rel_path.startswith(("http", "gs://")):
                         abs_path = self.media_root / rel_path
                         if abs_path.exists():
-                            # 2. Digest Filter: 基于内容摘要去重
+                            # 2. Digest Filter: Deduplicate based on content digest
                             digest = frame.get("digest")
                             if digest:
                                 if digest in seen_digests:
@@ -40,12 +61,23 @@ class SyncContextMixin:
         return {"files_to_upload": files_to_upload, "asset_id": asset_id, "material_id": str(target.id)}
 
     def _handle_sync(self, target, result):
+        """
+        Handle the result from the SyncService.
+
+        Updates the 'path' field in the keyframe_map with the cloud URL
+        returned by the uploader. Uses digest-based broadcasting to update
+        duplicate frames that were skipped during upload.
+
+        Args:
+            target: The Material instance.
+            result: A dictionary containing a 'mapping' of local paths to cloud URLs.
+        """
         mapping: Dict[str, str] = result.get("mapping", {})
         if not mapping or not target.keyframe_map:
             return
 
-        # 1. 构建 Digest -> Cloud URL 的映射 (广播源)
-        # 因为上传时进行了去重，我们需要通过已上传的文件路径反查其 Digest
+        # 1. Build Digest -> Cloud URL mapping (Broadcasting Source)
+        # Since we deduplicated uploads, we need to map uploaded digests back to URLs
         digest_to_url = {}
         for slice_id, frames in target.keyframe_map.items():
             for frame in frames:
@@ -62,16 +94,16 @@ class SyncContextMixin:
                 digest = frame.get("digest")
                 rel_path = frame.get("path")
 
-                # 优先尝试通过 Digest 广播更新 (处理冗余帧)
+                # Priority: Try to update via Digest broadcast (handles redundant frames)
                 if digest and digest in digest_to_url:
                     frame["path"] = digest_to_url[digest]
                 elif rel_path:
-                    # Fallback: 尝试通过 Path 更新
+                    # Fallback: Try to update via Path mapping
                     abs_path = str(self.media_root / rel_path)
                     if abs_path in mapping:
                         frame["path"] = mapping[abs_path]
 
-        # 确保回写的是 FrameDataInput
+        # Ensure we write back valid FrameDataInput objects
         processed_map = {
             slice_id: [FrameDataInput(**frame_data).model_dump() for frame_data in frames]
             for slice_id, frames in updated_keyframe_map.items()
@@ -79,13 +111,30 @@ class SyncContextMixin:
         target.keyframe_map = processed_map
 
     def _check_sync_ready(self, target):
-        # Sync 依赖 keyframe_map
+        """
+        Check if the Sync task is ready to run.
+
+        Args:
+            target: The Material instance.
+
+        Returns:
+            True if keyframe_map is populated, False otherwise.
+        """
         return bool(target.keyframe_map) and any(bool(v) for v in target.keyframe_map.values())
 
     def _check_sync_done(self, target):
+        """
+        Check if the Sync task has already been completed.
+
+        Args:
+            target: The Material instance.
+
+        Returns:
+            True if any frame path in keyframe_map points to a cloud URL.
+        """
         if not target.keyframe_map:
             return False
-        # 检查 keyframe_map 中是否有任何一个帧的 path 已经变为云端地址
+        # Check if any frame path has been updated to a cloud URL
         for slice_id, frames in target.keyframe_map.items():
             for frame in frames:
                 if frame.get("path", "").startswith(("http", "gs://")):

@@ -8,7 +8,6 @@ from typing import Dict, List, Optional
 
 from apps.workflow.common.cloud_client import CloudApiService
 
-# [修正] 引用新位置的 schemas
 from ..schemas import SubtitleItem
 
 logger = logging.getLogger(__name__)
@@ -16,8 +15,14 @@ logger = logging.getLogger(__name__)
 
 class TextAnalyzerService:
     """
-    [Refinery Ingestion Operator] 文本解析标准化算子
-    完全自包含：不引用外部 parse_srt_content，直接实现从原始文本到 SubtitleItem 的转化。
+    [Refinery Ingestion Operator] 文本解析标准化算子。
+
+    职责：
+    1. 解析原始字幕文本 (SRT/VTT 风格)。
+    2. 清洗文本内容 (去除标签、特效符、环境音)。
+    3. 智能合并断句 (针对中文优化)。
+    4. 转换为标准的 SubtitleItem 结构。
+    5. (可选) 调用 Cloud API 进行语义级合并。
     """
 
     @staticmethod
@@ -29,10 +34,24 @@ class TextAnalyzerService:
         lang: str = "zh",
         model_name: str = "models/gemini-2.5-flash",
     ) -> List[Dict]:
+        """
+        执行文本解析任务。
+
+        Args:
+            content: 原始字幕文本内容。
+            cloud_client: CloudApiService 实例 (用于语义合并)。
+            temp_file_path: 临时文件路径 (用于语义合并上传)。
+            enable_semantic_merge: 是否启用语义合并。
+            lang: 语言代码。
+            model_name: 使用的 LLM 模型名称。
+
+        Returns:
+            标准化对白列表 (List[SubtitleItem.model_dump()])。
+        """
         if not content or not content.strip():
             return []
 
-        # [New] 前置清洗：编码、标签、环境音
+        # 前置清洗：编码、标签、环境音
         content = TextAnalyzerService._preprocess_content(content)
 
         # 1. 规范化换行并切割块
@@ -67,7 +86,7 @@ class TextAnalyzerService:
                 end_sec = TextAnalyzerService._parse_time_to_seconds(end_str)
 
                 # 4. 提取文本内容并尝试分离角色
-                # [New] 使用智能合并逻辑替代简单的 " ".join
+                # 使用智能合并逻辑替代简单的 " ".join
                 raw_lines = lines[text_start_idx:]
                 full_text = TextAnalyzerService._merge_lines_smartly(raw_lines)
                 speaker = "Unknown"
@@ -82,7 +101,6 @@ class TextAnalyzerService:
                     speaker, clean_content = parts[0].strip(), parts[1].strip()
 
                 # 5. 构造强契约 SubtitleItem
-                # 这一步会自动校验字段：index, content, start_time, end_time, speaker
                 item = SubtitleItem(
                     index=index_counter, content=clean_content, start_time=start_sec, end_time=end_sec, speaker=speaker
                 )
@@ -91,11 +109,10 @@ class TextAnalyzerService:
                 index_counter += 1
 
             except Exception as e:
-                # 记录具体哪一块解析出错，但不中断整体流程，除非全是错的
                 logger.warning(f"TextAnalyzer: 忽略异常格式块: {e}")
                 continue
 
-        # [New] 场景 3: 语义合并 (LLM)
+        # 场景 3: 语义合并 (LLM)
         if enable_semantic_merge and cloud_client and temp_file_path and standardized_list:
             logger.info("TextAnalyzer: 启动语义合并流程...")
             merged_list = TextAnalyzerService._semantic_merge_subtitles(
@@ -113,27 +130,22 @@ class TextAnalyzerService:
     @staticmethod
     def _preprocess_content(content: str) -> str:
         """
-        [清洗管道] 对原始 SRT 文本进行预处理
-        1. 去除 BOM 头
-        2. 去除 HTML 样式标签 (<b>, <i>, <font> 等)
-        3. 去除 ASS/SSA 风格控制符 ({\an8} 等)
-        4. 去除环境音/听障辅助标识 ([...], (...))
+        [内部方法] 对原始 SRT 文本进行预处理。
+        1. 去除 BOM 头。
+        2. 去除 HTML 样式标签 (<b>, <i>, <font> 等)。
+        3. 去除 ASS/SSA 风格控制符 ({\an8} 等)。
+        4. 去除环境音/听障辅助标识 ([...], (...))。
         """
         # 1. 去除 BOM
         content = content.lstrip("\ufeff")
 
         # 2. 去除 HTML 标签 (非贪婪匹配)
-        # e.g., <b>Hello</b> -> Hello, <br> -> ""
         content = re.sub(r"<[^>]+>", "", content)
 
         # 3. 去除 ASS 风格控制符
-        # e.g., {\an8} -> ""
         content = re.sub(r"\{[^}]+\}", "", content)
 
-        # 4. 去除环境音/备注 (策略 A: 清洗)
-        # e.g., [Music playing], (Applause)
-        # 注意：这里假设 [] 和 () 内全是噪音。如果对白中有括号补充说明，也会被误删。
-        # 但在 SRT 标准对白中，这通常是安全的假设。
+        # 4. 去除环境音/备注
         content = re.sub(r"\[[^\]]+\]", "", content)
         content = re.sub(r"\([^)]+\)", "", content)
 
@@ -142,7 +154,8 @@ class TextAnalyzerService:
     @staticmethod
     def _merge_lines_smartly(lines: List[str]) -> str:
         """
-        [智能合并] 合并多行字幕，避免中文之间出现不必要的空格
+        [内部方法] 智能合并多行字幕。
+        避免中文之间出现不必要的空格，同时保留英文单词间的空格。
         """
         if not lines:
             return ""
@@ -150,7 +163,6 @@ class TextAnalyzerService:
         result = lines[0]
         for line in lines[1:]:
             # 如果前一行结尾是中文，且当前行开头是中文，则直接拼接
-            # 简单判断：Unicode 范围 \u4e00-\u9fa5
             if result and line and "\u4e00" <= result[-1] <= "\u9fa5" and "\u4e00" <= line[0] <= "\u9fa5":
                 result += line
             else:
@@ -160,7 +172,7 @@ class TextAnalyzerService:
     @staticmethod
     def _parse_time_to_seconds(time_str: str) -> float:
         """
-        内部工具：将 00:00:14,333 或 00:00:14.333 转化为秒数
+        [内部方法] 将时间字符串 (00:00:14,333) 转化为秒数 (float)。
         """
         time_str = time_str.replace(",", ".")  # 兼容格式
         h, m, s = time_str.split(":")
@@ -171,7 +183,7 @@ class TextAnalyzerService:
         client: CloudApiService, subtitles: List[Dict], temp_file_path: Path, lang: str, model_name: str
     ) -> List[Dict]:
         """
-        调用 Cloud SUBTITLE_MERGER 接口进行语义合并
+        [内部方法] 调用 Cloud SUBTITLE_MERGER 接口进行语义合并。
         """
         # 1. 写入临时文件
         try:
@@ -187,7 +199,7 @@ class TextAnalyzerService:
             logger.error(f"TextAnalyzer: Failed to upload subtitles file - {upload_rel_path}")
             return []
 
-        # 3. 构造 Payload (生产模式)
+        # 3. 构造 Payload
         payload = {
             "lang": lang,
             "model": model_name,
@@ -210,7 +222,6 @@ class TextAnalyzerService:
             return []
 
         # 6. 下载结果
-        # 结果通常包含 download_url
         download_url = final_data.get("download_url") or final_data.get("result", {}).get("download_url")
         if download_url:
             dl_success, content_bytes = client.download_task_result(download_url)
@@ -218,5 +229,4 @@ class TextAnalyzerService:
                 result_json = json.loads(content_bytes.decode("utf-8"))
                 return result_json.get("merged_subtitles", [])
 
-        # Fallback: 检查 result 中是否直接包含数据 (调试模式可能发生)
         return final_data.get("result", {}).get("merged_subtitles", [])

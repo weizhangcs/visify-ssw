@@ -17,12 +17,27 @@ logger = logging.getLogger(__name__)
 
 
 class AudioAnalyzerService:
+    """
+    [本地算子] 音频声学特征分析服务。
+
+    职责：
+    1. 从视频中加载音频。
+    2. 针对对白轨道中的每一句，提取声学特征 (音高、语速、能量)。
+    3. 基于特征进行简单的启发式判断 (性别、音高/语速/音量等级)。
+    4. 将结果回填到 SubtitleItem 的 audio_analysis 字段。
+    """
+
     @staticmethod
     def run(video_path: Path, dialogue_track: List[Dict]) -> List[Dict]:
         """
-        [本地算子] 音频声纹分析
-        输入: 视频路径, 对白轨道
-        输出: 带有 audio_analysis 的对白轨道
+        执行音频分析任务。
+
+        Args:
+            video_path: 视频文件路径 (用于提取音频)。
+            dialogue_track: 对白轨道数据。
+
+        Returns:
+            更新后的对白轨道数据 (带有 audio_analysis)。
         """
         if not dialogue_track:
             return []
@@ -70,6 +85,18 @@ class AudioAnalyzerService:
 
     @staticmethod
     def _analyze_segment(y: np.ndarray, sr: int, text: str, duration: float) -> AudioAnalysis:
+        """
+        [内部方法] 分析单个音频片段的声学特征。
+
+        Args:
+            y: 音频波形数据 (numpy array)。
+            sr: 采样率。
+            text: 对白文本内容。
+            duration: 音频时长。
+
+        Returns:
+            AudioAnalysis 对象。
+        """
         # A. 音高 (Pitch) & 性别推断
         # 使用 PYIN 算法提取基频 (F0)
         f0, voiced_flag, voiced_probs = librosa.pyin(y, fmin=50, fmax=300, sr=sr)

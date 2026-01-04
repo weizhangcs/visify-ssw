@@ -7,10 +7,23 @@ logger = logging.getLogger(__name__)
 
 
 class RefineryAtomScheduler(BaseAtomScheduler):
+    """
+    [调度器] Refinery 专用原子调度器。
+
+    负责根据 RefineryAtomRule 定义的规则，驱动 RefineryAtomPipeline 的执行。
+    核心职责：
+    1. dispatch: 将具体的原子任务发送到 Celery 队列。
+    2. record_and_dispatch: 记录当前步骤结果，并根据依赖关系自动触发下一步。
+    """
+
     @classmethod
     def dispatch(cls, target_id: str, step_config: dict):
         """
-        点火：直接向指定队列发送任务
+        点火：直接向指定队列发送任务。
+
+        Args:
+            target_id: 目标 Pipeline 的 ID (注意：不是 Material ID)。
+            step_config: 规则配置中的单步配置 (包含 seq, unit_slug 等)。
         """
         # 传递 target_id 代替原本的 pipeline_id
         celery_app.send_task(
@@ -22,7 +35,15 @@ class RefineryAtomScheduler(BaseAtomScheduler):
     @classmethod
     def record_and_dispatch(cls, pipe_ctx, current_seq, mode, **kwargs):
         """
-        记录执行结果并驱动下一跳
+        记录执行结果并驱动下一跳。
+
+        通常在 Task 执行成功后调用。它会检查当前 Pipeline 的 Metrics，
+        遍历规则配置，找出所有依赖已满足且尚未执行的步骤，自动进行派发。
+
+        Args:
+            pipe_ctx: 当前 Pipeline 上下文。
+            current_seq: 刚完成的步骤序号。
+            mode: 执行模式 (PROD/DEBUG)。
         """
         logger.info(f"Step {current_seq} finished in {mode} mode.")
 

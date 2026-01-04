@@ -11,6 +11,15 @@ logger = logging.getLogger(__name__)
 
 
 class SlicingService:
+    """
+    [物理算子] 视觉切片服务。
+
+    职责：
+    1. 探测视频的视觉转场点 (Scene Changes)。
+    2. 基于对白和声纹数据，计算切片的时间边界。
+    3. 生成多模态切片 (MultimodalSlice) 结构。
+    """
+
     @staticmethod
     def run(
         video_path: Path,
@@ -24,10 +33,20 @@ class SlicingService:
         silence_thresh: float = 0.02,
     ) -> List[Dict]:
         """
-        [物理算子] 视觉切片逻辑
-        职责：1. 镜头探测 2. 对白分组与Padding 3. 时间轴全覆盖切分
-        输入：视频路径, 视频时长, 对白列表
-        输出：切片清单 (List[Dict])
+        执行切片逻辑。
+
+        Args:
+            video_path: 视频文件路径。
+            video_duration: 视频总时长。
+            dialogue_track: 对白轨道数据。
+            waveform_data: 音频波形数据。
+            scene_threshold: 场景检测阈值 (0.0-1.0)。
+            dialogue_gap: 对白合并的最大间隔 (秒)。
+            max_pad: 切片前后填充的最大时长 (秒)。
+            silence_thresh: 静音检测阈值。
+
+        Returns:
+            多模态切片字典列表 (List[MultimodalSlice.model_dump()])。
         """
         # 1. 物理执行：镜头变更探测 (基于 FFmpeg)
         scene_changes = SlicingService._detect_scene_changes(video_path, threshold=scene_threshold)
@@ -52,7 +71,16 @@ class SlicingService:
 
     @staticmethod
     def _detect_scene_changes(video_path: Path, threshold: float = 0.3) -> List[float]:
-        """[物理镜像] 使用 ffmpeg 探测视觉转场点"""
+        """
+        [内部方法] 使用 ffmpeg 探测视觉转场点。
+
+        Args:
+            video_path: 视频路径。
+            threshold: 判定阈值。
+
+        Returns:
+            转场时间戳列表 (秒)。
+        """
         filter_chain = f"[0:v]select='gt(scene,{threshold})',showinfo[outv]"  # noqa: E231
         cmd = ["ffmpeg", "-i", str(video_path), "-filter_complex", filter_chain, "-map", "[outv]", "-f", "null", "-"]
 
@@ -75,11 +103,19 @@ class SlicingService:
 
     @staticmethod
     def _group_dialogues(dialogue_track: List[Dict], gap_threshold: float = 1.0) -> List[Dict]:
-        """[逻辑] 将间隔小于 gap_threshold 的对白合并为一个切片"""
+        """
+        [内部方法] 将间隔小于 gap_threshold 的对白合并为一个切片组。
+
+        Args:
+            dialogue_track: 原始对白列表。
+            gap_threshold: 合并阈值。
+
+        Returns:
+            合并后的对白组列表 (仅包含时间边界)。
+        """
         if not dialogue_track:
             return []
 
-        # 字段名修正：对齐 SubtitleItem Schema
         sorted_track = sorted(dialogue_track, key=lambda x: x.get("start_time", 0))
         groups = []
 
@@ -109,7 +145,20 @@ class SlicingService:
         max_pad: float = 0.5,
         silence_thresh: float = 0.02,
     ) -> List[Dict]:
-        """[逻辑] 基于声纹数据的动态 Padding (呼吸感)"""
+        """
+        [内部方法] 基于声纹数据的动态 Padding (呼吸感)。
+        在不覆盖相邻对白的前提下，向前后扩展切片边界，直到遇到静音或达到最大值。
+
+        Args:
+            groups: 对白组列表。
+            waveform: 波形数据。
+            duration: 视频总时长。
+            max_pad: 最大填充时长。
+            silence_thresh: 静音阈值。
+
+        Returns:
+            填充后的对白组列表。
+        """
         if not waveform or duration <= 0:
             return groups
 
@@ -163,7 +212,15 @@ class SlicingService:
         padded_dialogues: List[Dict],
         original_dialogue_track: List[Dict],
     ) -> List[Dict]:
-        """[核心重构] 构建多模态切片容器的三步流程"""
+        """
+        [内部方法] 构建多模态切片容器的三步流程。
+        1. Temporal Segmentation: 结合对白和视觉转场，划分全覆盖的时间区间。
+        2. Skeleton Creation: 创建 MultimodalSlice 对象。
+        3. Text Hydration: 将原始对白填充回对应的切片中。
+
+        Returns:
+            序列化后的切片列表。
+        """
         # --- 步骤 1: 定义时间区间 (Temporal Segmentation) ---
         temporal_segments = []
         last_time = 0.0

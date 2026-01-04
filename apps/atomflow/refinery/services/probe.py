@@ -12,15 +12,28 @@ logger = logging.getLogger(__name__)
 
 
 class ProbeService:
+    """
+    [物理算子] 媒体文件探测服务。
+
+    职责：
+    1. 使用 FFprobe 提取视频文件的技术元数据 (TechMeta)。
+    2. 使用 FFmpeg 和 NumPy 计算音频波形数据 (Waveform)。
+    """
+
     @staticmethod
     def run(proxy_path: Path, temp_wav_path: Path) -> Tuple[Dict, float, List[float]]:
         """
-        [物理算子] 针对已生成的 Proxy 进行探测
-        输入：
-            proxy_path: 代理视频的绝对路径 (Path)
-            temp_wav_path: 由 Context 提供的隔离临时音频文件路径 (Path)
-        输出：
-            (元数据字典, 时长, 声纹数据列表)
+        执行探测任务。
+
+        Args:
+            proxy_path: 代理视频的绝对路径。
+            temp_wav_path: 用于生成波形的临时 WAV 文件路径。
+
+        Returns:
+            一个元组，包含：
+            - tech_meta (Dict): 技术元数据字典。
+            - duration (float): 视频时长（秒）。
+            - waveform_list (List[float]): 归一化的波形数据列表。
         """
         # 1. 探测 Proxy 的物理时长和技术参数
         tech_meta, duration = ProbeService._probe_file(proxy_path)
@@ -32,7 +45,18 @@ class ProbeService:
 
     @staticmethod
     def _probe_file(file_path: Path) -> Tuple[Dict, float]:
-        """[物理镜像] ffprobe 提取逻辑"""
+        """
+        [内部方法] 调用 ffprobe 提取元数据。
+
+        Args:
+            file_path: 目标文件路径。
+
+        Returns:
+            (TechMeta Dict, Duration Float)
+
+        Raises:
+            RuntimeError: 如果 ffprobe 执行失败。
+        """
         cmd = ["ffprobe", "-v", "quiet", "-print_format", "json", "-show_format", "-show_streams", str(file_path)]
         try:
             result = subprocess.run(cmd, capture_output=True, text=True, check=True, timeout=30)
@@ -58,8 +82,19 @@ class ProbeService:
     @staticmethod
     def _generate_peaks_in_memory(video_path: Path, temp_wav: Path) -> List[float]:
         """
-        [物理镜像] 核心声纹采样算法
-        不再自行创建 temp 文件，而是直接使用传入的 temp_wav 路径
+        [内部方法] 计算音频波形数据。
+
+        流程：
+        1. 使用 ffmpeg 从视频中提取音频流到临时 WAV 文件。
+        2. 使用 pydub 读取 WAV 文件。
+        3. 使用 numpy 进行降采样和归一化处理。
+
+        Args:
+            video_path: 源视频路径。
+            temp_wav: 临时 WAV 输出路径。
+
+        Returns:
+            归一化的波形峰值列表 (0.0 - 1.0)。
         """
         try:
             import numpy as np

@@ -11,17 +11,41 @@ logger = logging.getLogger(__name__)
 
 
 class TicketUploader:
-    """[Edge Transport] 纯粹的搬运算子"""
+    """
+    [Edge Transport] 文件批量上传服务。
+
+    职责：
+    1. 向 VSS Cloud 批量申请上传凭证 (Signed URLs)。
+    2. 使用线程池并发上传本地文件。
+    3. 返回本地路径到云端路径的映射。
+    """
 
     BATCH_SIZE = 500
 
     def __init__(self, material_id: str, asset_id: str, cloud_client):
+        """
+        初始化 Uploader。
+
+        Args:
+            material_id: 物料 ID。
+            asset_id: 资产 ID。
+            cloud_client: 已配置的 CloudApiService 实例。
+        """
         self.client = cloud_client
         self.material_id = material_id  # 实际的 material_id
         self.asset_id = asset_id
         self.gcs_session = requests.Session()
 
     def upload_files(self, local_files: List[Path]) -> Dict[str, str]:
+        """
+        执行批量上传。
+
+        Args:
+            local_files: 本地文件路径列表 (Path 对象)。
+
+        Returns:
+            一个字典，映射关系为：str(本地绝对路径) -> 云端 URL。
+        """
         if not local_files:
             logger.info(f"[{self.material_id}] No files to upload, skipping.")
             return {}
@@ -34,16 +58,13 @@ class TicketUploader:
         total_batches = len(chunks)
 
         for idx, chunk in enumerate(chunks, 1):
-            # --- 过程日志：批次开始 ---
             logger.info(f"[{self.material_id}] Progress: Batch {idx}/{total_batches} start ({len(chunk)} files).")
 
             try:
                 mapping = self._process_batch(chunk, batch_index=idx)
                 final_mapping.update(mapping)
-                # --- 过程日志：批次成功 ---
                 logger.info(f"[{self.material_id}] Progress: Batch {idx}/{total_batches} upload successful.")
             except Exception as e:
-                # 记录具体哪一个 Batch 挂了
                 logger.error(f"[{self.material_id}] Critical failure in Batch {idx}: {str(e)}")
                 raise
 
@@ -51,9 +72,12 @@ class TicketUploader:
         return final_mapping
 
     def _process_batch(self, files: List[Path], batch_index: int) -> Dict[str, str]:
+        """
+        [内部方法] 处理单个批次的文件上传。
+        """
         filename_map = {f.name: f for f in files}
 
-        # 1. 换票阶段日志
+        # 1. 换票阶段
         logger.info(f"[{self.material_id}] Batch {batch_index}: Requesting {len(files)} tickets from cloud...")
 
         start_ticket = time.time()
@@ -65,10 +89,10 @@ class TicketUploader:
         base_path = resp["upload_base_path"]
         signed_urls = resp["signed_urls"]
         logger.info(
-            f"[{self.material_id}] Batch {batch_index}: Tickets received ({time.time() - start_ticket:.2f}s)."  # noqa : E231
+            f"[{self.material_id}] Batch {batch_index}: Tickets received ({time.time() - start_ticket:.2f}s)."  # noqa: E231, E501
         )
 
-        # 2. 并发上传阶段日志
+        # 2. 并发上传阶段
         batch_mapping = {}
         completed = 0
         total_in_batch = len(signed_urls)
@@ -94,6 +118,9 @@ class TicketUploader:
         return batch_mapping
 
     def _put_file(self, local_path: Path, signed_url: str):
+        """
+        [内部方法] 上传单个文件到 GCS/S3。
+        """
         with open(local_path, "rb") as f:
             resp = self.gcs_session.put(
                 signed_url, data=f, headers={"Content-Type": "application/octet-stream"}, timeout=30

@@ -5,7 +5,10 @@ from pydantic import BaseModel, Field
 
 
 class AudioAnalysis(BaseModel):
-    """[音频特征] 对白声学分析结果"""
+    """
+    [音频特征] 对白声学分析结果。
+    通常由音频分析模型产出，用于辅助情感判断或角色识别。
+    """
 
     gender: str = Field(default="Unknown", description="推测性别: Male | Female | Unknown")
     pitch_level: str = Field(default="Mid", description="音高等级: High | Mid | Low")
@@ -21,6 +24,7 @@ class AudioAnalysis(BaseModel):
 class SubtitleItem(BaseModel):
     """
     Refinery 全链路标准台词单元。
+
     1. 对齐 VSS Cloud 的 SubtitleInputItem。
     2. 作为 Material.dialogue_track 列表元素的存储标准。
     """
@@ -40,14 +44,20 @@ class SubtitleItem(BaseModel):
 
 
 class FrameData(BaseModel):
-    """[最小单元] 物理帧数据容器"""
+    """
+    [最小单元] 物理帧数据容器。
+    仅包含最基础的时间戳和路径信息。
+    """
 
     timestamp: float = Field(..., description="帧在视频中的时间戳（秒）")
     path: str = Field(..., description="相对路径")
 
 
 class VisualAnalysisData(BaseModel):
-    """[Cloud API 响应] 视觉分析结果"""
+    """
+    [Cloud API 响应] 视觉分析结果。
+    对应 VSS Cloud Visual Analyzer 的输出结构。
+    """
 
     shot_type: Optional[str] = Field(None, description="Main shot size (Label or Enum Key)")
     environment: Optional[str] = Field(None, description="Physical environment (e.g., Indoor-Bedroom, Outdoor-Street)")
@@ -61,6 +71,13 @@ class VisualAnalysisData(BaseModel):
 
 
 class FrameDataInput(FrameData):
+    """
+    [核心数据结构] 关键帧完整元数据。
+
+    作为 Material.keyframe_map 的 Value 结构。
+    记录了帧的生命周期：从本地提取 -> 云端同步 -> 视觉分析。
+    """
+
     frame_id: str = Field(default_factory=lambda: str(uuid.uuid4()), description="帧的唯一标识符")
     slice_id: int = Field(..., description="所属切片的ID")
     timestamp: float = Field(..., description="帧在视频中的时间戳（秒）")
@@ -75,7 +92,10 @@ class FrameDataInput(FrameData):
 
 
 class FrameDataOutput(BaseModel):
-    """[结果数据] 帧数据输出容器 (VLM 识别结果)"""
+    """
+    [结果数据] 帧数据输出容器 (VLM 识别结果)。
+    通常用于向前端展示或作为下游任务的输入。
+    """
 
     timestamp: float = Field(..., description="帧在视频中的时间戳（秒）")
     path: str = Field(..., description="云端路径")  # 最终的云端路径
@@ -91,7 +111,10 @@ class FrameDataOutput(BaseModel):
 
 
 class VisualContent(BaseModel):
-    """视觉内容容器"""
+    """
+    视觉内容容器。
+    聚合了切片级别的视觉分析结果。
+    """
 
     # frames: List[FrameData] = Field(default_factory=list, description="该切片下的关键帧") # 移除，帧数据在 keyframe_map
     # probe_data: Dict = Field(default_factory=dict, description="本地帧探测结果（如亮度、模糊度）") # 移除，在 keyframe_map
@@ -109,7 +132,12 @@ class AudioContent(BaseModel):
 
 
 class MultimodalSlice(BaseModel):
-    """[核心容器] 多模态切片"""
+    """
+    [核心容器] 多模态切片。
+
+    Material.visual_slices 的元素结构。
+    将时间轴上的一个片段聚合了视觉、听觉和文本信息。
+    """
 
     slice_id: int
     start_time: float
@@ -127,7 +155,7 @@ class VideoStreamMeta(BaseModel):
 
 
 class TechMeta(BaseModel):
-    """对应 tech_meta"""
+    """对应 tech_meta，存储 FFprobe 提取的技术元数据"""
 
     container: Optional[str] = None
     size: int = 0

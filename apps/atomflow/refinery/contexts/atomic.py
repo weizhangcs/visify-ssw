@@ -31,7 +31,7 @@ class RefineryAtomicContext(
     HLSContextMixin,
     SlicingContextMixin,
     AudioAnalyzeContextMixin,
-    FrameProbeContextMixin,  # 新增
+    FrameProbeContextMixin,
     FrameExtractContextMixin,
     TextAnalyzeContextMixin,
     CharacterRefineContextMixin,

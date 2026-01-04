@@ -18,17 +18,27 @@ from apps.atomflow.refinery.services.uploader import TicketUploader
 from apps.atomflow.refinery.services.visual_analyzer import VisualAnalyzerService
 from apps.workflow.common.cloud_client import CloudApiService
 
-from .contexts import RefineryAtomicContext, RefineryPipelineContext
+from .contexts.atomic import RefineryAtomicContext
+from .contexts.pipeline import RefineryPipelineContext
 from .scheduler import RefineryAtomScheduler
 
 
 @shared_task(bind=True, name="apps.atomflow.refinery.tasks.execute_step")
 def refinery_atomic_task(self, pipeline_id, seq, op_slug):
     """
-    [Task 范式实现]
-    1. 隔离上下文
-    2. 执行算子 (直接调用 apps.refinery.services)
-    3. 结果回流
+    [Task] Refinery 原子任务执行入口。
+
+    遵循 Atomflow 标准范式：
+    1. Context Isolation: 初始化 Pipeline 和 Atomic 上下文。
+    2. Payload Extraction: 从 Atomic Context 获取纯净输入数据。
+    3. Execution: 调用 _dispatch_service 分发到具体的 Service 执行。
+    4. Result Handling: 将结果回填至 Atomic Context。
+    5. Scheduling: 记录 Metrics 并驱动 Scheduler 进行下一跳。
+
+    Args:
+        pipeline_id: 当前执行的 Pipeline ID。
+        seq: 当前步骤在规则中的序号。
+        op_slug: 算子标识符 (如 transcode, probe)。
     """
     pipe_ctx = RefineryPipelineContext(pipeline_id)
     # 修正：RefineryPipelineContext.pipeline.target_id 是 CharField，但我们需要传递给 AtomicContext
@@ -72,7 +82,21 @@ def refinery_atomic_task(self, pipeline_id, seq, op_slug):
 
 def _dispatch_service(op_slug: str, payload: dict, target_id: str) -> dict:
     """
-    [内部适配器] 将 Context Payload 转换为 Service 参数，并规范化返回值
+    [内部适配器] Service 分发与参数适配。
+
+    职责：
+    1. 将 Context 提供的字典 Payload 转换为 Service 所需的强类型参数 (如 Path 对象)。
+    2. 处理部分临时文件路径的规划 (如 output_path)。
+    3. 调用具体的 Service.run 方法。
+    4. 将 Service 返回值规范化为字典，供 Context 回填。
+
+    Args:
+        op_slug: 算子标识符。
+        payload: 输入数据字典。
+        target_id: 目标对象 ID (用于路径规划)。
+
+    Returns:
+        执行结果字典。
     """
     if op_slug == "transcode":
         source_path = Path(payload["source_path"])

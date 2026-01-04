@@ -7,11 +7,28 @@ logger = logging.getLogger(__name__)
 
 
 class TranscodeService:
+    """
+    [物理算子] 视频转码服务。
+
+    职责：
+    1. 使用 FFmpeg 将源视频转码为标准化的代理视频 (720p, H.264)。
+    2. 提供详细的日志监控和错误捕获。
+    """
+
     @staticmethod
-    def run(source_path: Path, output_path: Path):
+    def run(source_path: Path, output_path: Path) -> bool:
         """
-        [物理算子] 纯粹的 FFmpeg 转码逻辑
-        职责：物理执行 + 详细日志监控
+        执行视频转码任务。
+
+        Args:
+            source_path: 源视频文件的绝对路径。
+            output_path: 转码后输出文件的绝对路径。
+
+        Returns:
+            True 如果转码成功。
+
+        Raises:
+            RuntimeError: 如果 FFmpeg 执行失败。
         """
         cmd = [
             "ffmpeg",
@@ -34,7 +51,7 @@ class TranscodeService:
         try:
             # capture_output=True 捕获 stdout/stderr
             # check=True 如果 ffmpeg 退出码不为 0 则抛出异常
-            result = subprocess.run(cmd, check=True, capture_output=True, text=True)  # noqa: F841
+            subprocess.run(cmd, check=True, capture_output=True, text=True)
             logger.info(f"Refinery Transcode Success: {output_path.name}")
             return True
 
