@@ -1,6 +1,7 @@
 from pathlib import Path
+from typing import Dict, List
 
-from ...schemas import MultimodalSlice
+from ...schemas import FrameDataInput
 
 
 class FrameExtractContextMixin:
@@ -17,14 +18,18 @@ class FrameExtractContextMixin:
             "rel_dir": str(rel_dir),
         }
 
-    def _handle_frame_extract(self, target, result):
-        raw_slices = result.get("slices", [])
-        target.visual_slices = [MultimodalSlice(**s).model_dump() for s in raw_slices]
+    def _handle_frame_extract(self, target, result: Dict[str, List[Dict]]):
+        # result 现在是 keyframe_map 的内容
+        # 确保 keyframe_map 存储的是 FrameDataInput，并进行一次校验
+        processed_map = {
+            slice_id: [FrameDataInput(**frame_data).model_dump() for frame_data in frames]
+            for slice_id, frames in result.items()
+        }
+        target.keyframe_map = processed_map
 
     def _check_frame_extract_ready(self, target):
         return bool(target.proxy_video) and bool(target.visual_slices)
 
     def _check_frame_extract_done(self, target):
-        if not target.visual_slices:
-            return False
-        return all(s.get("frames") for s in target.visual_slices)
+        # 检查 keyframe_map 是否已填充
+        return bool(target.keyframe_map) and any(bool(v) for v in target.keyframe_map.values())

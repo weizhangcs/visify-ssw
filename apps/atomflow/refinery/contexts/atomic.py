@@ -9,6 +9,7 @@ from apps.common.atomflow.base_contexts import BaseAtomicContext
 from ..models import Material, RefineryAtomPipeline
 from .operators.character_refine import CharacterRefineContextMixin
 from .operators.frame_extract import FrameExtractContextMixin
+from .operators.frame_probe import FrameProbeContextMixin
 from .operators.hls import HLSContextMixin
 from .operators.probe import ProbeContextMixin
 from .operators.slicing import SlicingContextMixin
@@ -17,6 +18,7 @@ from .operators.text_analyze import TextAnalyzeContextMixin
 
 # 引入所有算子 Mixin
 from .operators.transcode import TranscodeContextMixin
+from .operators.visual_analyzer import VisualAnalyzerContextMixin
 
 logger = logging.getLogger(__name__)
 
@@ -27,10 +29,12 @@ class RefineryAtomicContext(
     ProbeContextMixin,
     HLSContextMixin,
     SlicingContextMixin,
+    FrameProbeContextMixin,  # 新增
     FrameExtractContextMixin,
     TextAnalyzeContextMixin,
     CharacterRefineContextMixin,
     SyncContextMixin,
+    VisualAnalyzerContextMixin,
 ):
     """
     旁路业务上下文：负责 Material 与 算子之间的数据平配。

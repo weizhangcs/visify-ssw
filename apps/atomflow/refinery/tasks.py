@@ -5,6 +5,7 @@ from celery import shared_task
 
 from apps.atomflow.refinery.services.character_refiner import CharacterRefinerService
 from apps.atomflow.refinery.services.frame_extractor import FrameExtractorService
+from apps.atomflow.refinery.services.frame_probe import FrameProbeService
 from apps.atomflow.refinery.services.hls_generator import HLSService
 from apps.atomflow.refinery.services.probe import ProbeService
 from apps.atomflow.refinery.services.slicer import SlicingService
@@ -13,6 +14,7 @@ from apps.atomflow.refinery.services.text_analyzer import TextAnalyzerService
 # 引入具体的业务 Service
 from apps.atomflow.refinery.services.transcoder import TranscodeService
 from apps.atomflow.refinery.services.uploader import TicketUploader
+from apps.atomflow.refinery.services.visual_analyzer import VisualAnalyzerService
 from apps.workflow.common.cloud_client import CloudApiService
 
 from .contexts import RefineryAtomicContext, RefineryPipelineContext
@@ -71,7 +73,6 @@ def _dispatch_service(op_slug: str, payload: dict, target_id: str) -> dict:
     """
     [内部适配器] 将 Context Payload 转换为 Service 参数，并规范化返回值
     """
-
     if op_slug == "transcode":
         source_path = Path(payload["source_path"])
         abs_output_path = Path(payload["output_path"])
@@ -128,7 +129,13 @@ def _dispatch_service(op_slug: str, payload: dict, target_id: str) -> dict:
         rel_dir = Path(payload["rel_dir"])
 
         updated_slices = FrameExtractorService.run(abs_proxy_path, slices, abs_output_dir, rel_dir)
-        return {"slices": updated_slices}
+        return updated_slices  # FrameExtractorService 现在直接返回 keyframe_map
+
+    elif op_slug == "frame_probe":
+        keyframe_map = payload["keyframe_map"]  # 接收的是 Dict[str, List[Dict]]
+        media_root_path = Path(payload["media_root"])
+        updated_keyframe_map = FrameProbeService.run(keyframe_map, media_root_path)
+        return updated_keyframe_map  # FrameProbeService 现在直接返回更新后的 keyframe_map
 
     elif op_slug == "text_analyze":
         # 数据读取已移至 Context
@@ -177,6 +184,20 @@ def _dispatch_service(op_slug: str, payload: dict, target_id: str) -> dict:
 
         # 回填逻辑已移至 Context
         return {"mapping": mapping}
+
+    elif op_slug == "visual_analyzer":
+        client = CloudApiService()
+        frames = payload["frames"]
+        lang = payload["lang"]
+        visual_model = payload.get("visual_model", "models/gemini-2.5-flash")
+
+        temp_file = Path(f"/tmp/visual_frames_{target_id}.json")
+        try:
+            result = VisualAnalyzerService.run(client, frames, lang, visual_model, temp_file)
+        finally:
+            if temp_file.exists():
+                temp_file.unlink()
+        return result
 
     else:
         raise ValueError(f"Unknown operator slug: {op_slug}")

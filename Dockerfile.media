@@ -26,8 +26,8 @@ WORKDIR /app
 COPY requirements.base.txt .
 COPY requirements.media.txt .
 RUN pip install --upgrade pip && \
-    pip install --no-cache-dir -i ${PIP_MIRROR_URL} -r requirements.media.txt
-
+    pip install --no-cache-dir -i ${PIP_MIRROR_URL} -r requirements.media.txt && \
+    pip install --no-cache-dir -i ${PIP_MIRROR_URL} opencv-python numpy
 COPY . .
 
 RUN useradd -m appuser && chown -R appuser:appuser /app

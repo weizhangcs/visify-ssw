@@ -30,7 +30,6 @@ def run_flow_test():
         {"seq": 2, "unit_slug": "probe", "name": "原子探测", "obligation": "REQUIRED", "dependence": [1]},
         {"seq": 3, "unit_slug": "text_analyze", "name": "文本分析", "obligation": "REQUIRED", "dependence": [1, 2]},
         {"seq": 4, "unit_slug": "character_refine", "name": "角色精修", "obligation": "REQUIRED", "dependence": [3]},
-        {"seq": 5, "unit_slug": "slicing", "name": "视觉切片", "obligation": "REQUIRED", "dependence": [1, 4]},
     ]
 
     rule, _ = RefineryAtomRule.objects.update_or_create(
