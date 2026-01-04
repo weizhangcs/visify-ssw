@@ -3,6 +3,7 @@ from pathlib import Path
 
 from celery import shared_task
 
+from apps.atomflow.refinery.services.audio_analyzer import AudioAnalyzerService
 from apps.atomflow.refinery.services.character_refiner import CharacterRefinerService
 from apps.atomflow.refinery.services.frame_extractor import FrameExtractorService
 from apps.atomflow.refinery.services.frame_probe import FrameProbeService
@@ -138,9 +139,33 @@ def _dispatch_service(op_slug: str, payload: dict, target_id: str) -> dict:
         return updated_keyframe_map  # FrameProbeService 现在直接返回更新后的 keyframe_map
 
     elif op_slug == "text_analyze":
-        # 数据读取已移至 Context
-        dialogue = TextAnalyzerService.run(payload["content"])
+        # [Update] 注入 Cloud Client 支持语义合并
+        client = CloudApiService()
+        content = payload["content"]
+        # 假设 payload 中可能包含 lang，如果没有则默认为 zh
+        lang = payload.get("lang", "zh")
+        model_name = payload.get("model_name", "models/gemini-2.5-flash")
+
+        temp_file = Path(f"/tmp/subtitle_merge_input_{target_id}.json")
+        try:
+            dialogue = TextAnalyzerService.run(
+                content,
+                cloud_client=client,
+                temp_file_path=temp_file,
+                enable_semantic_merge=True,
+                lang=lang,
+                model_name=model_name,
+            )
+        finally:
+            if temp_file.exists():
+                temp_file.unlink()
         return {"dialogue_track": dialogue}
+
+    elif op_slug == "audio_analyze":
+        video_path = Path(payload["video_path"])
+        dialogue_track = payload["dialogue_track"]
+        updated_track = AudioAnalyzerService.run(video_path, dialogue_track)
+        return {"dialogue_track": updated_track}
 
     elif op_slug == "character_refine":
         # 需要实例化 CloudClient

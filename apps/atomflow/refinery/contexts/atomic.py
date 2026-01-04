@@ -7,6 +7,7 @@ from django.conf import settings
 from apps.common.atomflow.base_contexts import BaseAtomicContext
 
 from ..models import Material, RefineryAtomPipeline
+from .operators.audio_analyze import AudioAnalyzeContextMixin
 from .operators.character_refine import CharacterRefineContextMixin
 from .operators.frame_extract import FrameExtractContextMixin
 from .operators.frame_probe import FrameProbeContextMixin
@@ -29,6 +30,7 @@ class RefineryAtomicContext(
     ProbeContextMixin,
     HLSContextMixin,
     SlicingContextMixin,
+    AudioAnalyzeContextMixin,
     FrameProbeContextMixin,  # 新增
     FrameExtractContextMixin,
     TextAnalyzeContextMixin,

@@ -4,6 +4,20 @@ from typing import List, Optional
 from pydantic import BaseModel, Field
 
 
+class AudioAnalysis(BaseModel):
+    """[音频特征] 对白声学分析结果"""
+
+    gender: str = Field(default="Unknown", description="推测性别: Male | Female | Unknown")
+    pitch_level: str = Field(default="Mid", description="音高等级: High | Mid | Low")
+    speed_level: str = Field(default="Normal", description="语速等级: Fast | Normal | Slow")
+    volume_level: str = Field(default="Normal", description="音量等级: Loud | Normal | Quiet")
+
+    # 原始数值 (用于调试或更精细的聚类)
+    avg_pitch_hz: float = Field(default=0.0, description="平均基频 (Hz)")
+    chars_per_sec: float = Field(default=0.0, description="语速 (字/秒)")
+    rms_energy: float = Field(default=0.0, description="能量均方根")
+
+
 class SubtitleItem(BaseModel):
     """
     Refinery 全链路标准台词单元。
@@ -17,6 +31,9 @@ class SubtitleItem(BaseModel):
     end_time: float = Field(..., description="结束秒数")
     speaker: str = Field(default="Unknown", description="角色名")
     reasoning: Optional[str] = Field(default=None, description="AI推理依据/置信度说明")
+    audio_analysis: Optional[AudioAnalysis] = Field(default=None, description="声学特征分析")
+    voice_mood: Optional[str] = Field(default=None, description="AI推断的语气/情感标签 (配音参考)")
+    original_indices: Optional[List[int]] = Field(default=None, description="合并前的原始索引列表")
 
     class Config:
         extra = "ignore"  # 允许云端返回额外字段但不报错，保持向后兼容

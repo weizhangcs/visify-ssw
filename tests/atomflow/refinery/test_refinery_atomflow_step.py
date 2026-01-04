@@ -14,7 +14,6 @@ django.setup()
 # [核心修改] 引入新实现的模型
 from apps.atomflow.refinery.models import Material, RefineryAtomPipeline, RefineryAtomRule  # noqa: E402
 from apps.atomflow.refinery.scheduler import RefineryAtomScheduler  # noqa: E402
-from apps.media_assets.models import Media  # noqa: E402
 
 
 def run_flow_test():
@@ -26,10 +25,7 @@ def run_flow_test():
     # 算子化框架必须依赖配置，我们先在数据库创建一个临时的测试规则
     # 全量编排：Transcode -> Probe -> HLS -> Text -> Char -> Slicing -> Frame -> Sync
     rules_json = [
-        {"seq": 1, "unit_slug": "transcode", "name": "原子转码", "obligation": "REQUIRED"},
-        {"seq": 2, "unit_slug": "probe", "name": "原子探测", "obligation": "REQUIRED", "dependence": [1]},
-        {"seq": 3, "unit_slug": "text_analyze", "name": "文本分析", "obligation": "REQUIRED", "dependence": [1, 2]},
-        {"seq": 4, "unit_slug": "character_refine", "name": "角色精修", "obligation": "REQUIRED", "dependence": [3]},
+        {"seq": 10, "unit_slug": "visual_analyzer", "name": "视觉识别", "obligation": "REQUIRED"},
     ]
 
     rule, _ = RefineryAtomRule.objects.update_or_create(
@@ -39,20 +35,15 @@ def run_flow_test():
     print(f"[*] 规则已就绪: {rule.slug} (步骤数: {rule.step_count})")
 
     # 2. 准备业务物料 (Material)
-    # 自动寻找一个有源视频的 Media，如果未关联 Material 则自动创建
-    media = Media.objects.get(title="001")
-    if not media:
-        print("❌ 错误：Media 库中没有可用的视频资源。请先在系统中上传至少一个视频文件。")
+    # 直接使用提供的 material_id
+    material_id = "eff31800-0ac6-4027-b5b2-ec0b65f5e992"
+    try:
+        material = Material.objects.get(id=material_id)
+    except Material.DoesNotExist:
+        print(f"❌ 错误：Material ID '{material_id}' 不存在。请确保该物料已存在且包含 proxy_video 和 visual_slices。")
         return
 
-    material, created = Material.objects.get_or_create(media=media)
-    print(f"[*] 选中 Media: {media.title} ({media.id})")
-    print(f"[*] {'创建新' if created else '复用'} Material: {material.id}")
-
-    # 清理旧状态以便重测 (可选)
-    # material.proxy_video = ""
-    # material.hls_playlist = ""
-    # material.save()
+    print(f"[*] 选中 Material: {material.id} (Media: {material.media.title})")
 
     # 3. [关键步骤] 物理落地执行轨迹 (Pipeline)
     # 检查是否已存在 Pipeline，如果存在则复用或清理

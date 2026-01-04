@@ -3,7 +3,7 @@ class CharacterRefineContextMixin:
         asset = getattr(target.media, "asset", None)
         lang = "zh"
         if asset and asset.language:
-            lang = asset.language.split("_")[0]
+            lang = asset.language.split("-")[0]
 
         return {
             "dialogue_track": target.dialogue_track,

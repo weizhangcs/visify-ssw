@@ -40,7 +40,7 @@ class CharacterRefinerService:
             "lang": asset_meta.get("lang", "zh"),
         }
 
-        api_success, task_response = client.create_task("character_pre_annotator", payload)
+        api_success, task_response = client.create_task("CHARACTER_PRE_ANNOTATOR", payload)
         if not api_success:
             raise RuntimeError(f"CharacterRefiner: 任务创建失败 - {task_response}")
 

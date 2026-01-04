@@ -12,7 +12,12 @@ class TextAnalyzeContextMixin:
                 except UnicodeDecodeError:
                     content = abs_path.read_text(encoding="gb18030", errors="ignore")
 
-        return {"content": content}
+        asset = getattr(target.media, "asset", None)
+        lang = "zh"
+        if asset and asset.language:
+            lang = asset.language.split("-")[0]
+
+        return {"content": content, "lang": lang}
 
     def _handle_text_analyze(self, target, result):
         target.dialogue_track = result.get("dialogue_track", [])

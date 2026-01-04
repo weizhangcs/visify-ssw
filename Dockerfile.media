@@ -16,6 +16,7 @@ RUN sed -i "s|deb.debian.org|$APT_MIRROR|g" /etc/apt/sources.list.d/debian.sourc
     apt-get install -y --no-install-recommends \
         ffmpeg \
         gcc \
+        libsndfile1 \
         libpq-dev \
     && apt-get clean && \
     rm -rf /var/lib/apt/lists/*
@@ -27,7 +28,7 @@ COPY requirements.base.txt .
 COPY requirements.media.txt .
 RUN pip install --upgrade pip && \
     pip install --no-cache-dir -i ${PIP_MIRROR_URL} -r requirements.media.txt && \
-    pip install --no-cache-dir -i ${PIP_MIRROR_URL} opencv-python numpy
+    pip install --no-cache-dir -i ${PIP_MIRROR_URL} opencv-python numpy librosa
 COPY . .
 
 RUN useradd -m appuser && chown -R appuser:appuser /app
