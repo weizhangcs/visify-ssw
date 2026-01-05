@@ -126,7 +126,7 @@ def _dispatch_service(op_slug: str, payload: dict, target_id: str) -> dict:
     elif op_slug == "slicing":
         abs_proxy_path = Path(payload["proxy_path"])
         duration = payload["duration"]
-        dialogue_track = payload["dialogue_track"]
+        dialogue = payload["dialogue"]
         waveform_data = payload.get("waveform_data", [])
 
         # Extract optional configs from payload if they exist
@@ -138,7 +138,7 @@ def _dispatch_service(op_slug: str, payload: dict, target_id: str) -> dict:
         slices = SlicingService.run(
             abs_proxy_path,
             duration,
-            dialogue_track,
+            dialogue,
             waveform_data,
             scene_threshold=scene_threshold,
             dialogue_gap=dialogue_gap,
@@ -183,13 +183,13 @@ def _dispatch_service(op_slug: str, payload: dict, target_id: str) -> dict:
         finally:
             if temp_file.exists():
                 temp_file.unlink()
-        return {"dialogue_track": dialogue}
+        return {"dialogue": dialogue}
 
     elif op_slug == "audio_analyze":
         video_path = Path(payload["video_path"])
-        dialogue_track = payload["dialogue_track"]
-        updated_track = AudioAnalyzerService.run(video_path, dialogue_track)
-        return {"dialogue_track": updated_track}
+        dialogue = payload["dialogue"]
+        updated_track = AudioAnalyzerService.run(video_path, dialogue)
+        return {"dialogue": updated_track}
 
     elif op_slug == "character_refine":
         # 需要实例化 CloudClient
@@ -200,7 +200,7 @@ def _dispatch_service(op_slug: str, payload: dict, target_id: str) -> dict:
 
         temp_json_path = Path(f"/tmp/dialogue_{target_id}.json")
         with open(temp_json_path, "w", encoding="utf-8") as f:
-            json.dump(payload["dialogue_track"], f)
+            json.dump(payload["dialogue"], f)
 
         asset_meta = {
             "video_title": payload["video_title"],

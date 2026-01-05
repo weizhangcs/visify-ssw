@@ -40,13 +40,13 @@ class TextAnalyzeContextMixin:
         """
         Handle the result from the TextAnalyzerService.
 
-        Updates the Material's dialogue_track with the analyzed subtitle items.
+        Updates the Material's dialogue with the analyzed subtitle items.
 
         Args:
             target: The Material instance.
-            result: A dictionary containing the 'dialogue_track' list.
+            result: A dictionary containing the 'dialogue' list.
         """
-        target.dialogue_track = result.get("dialogue_track", [])
+        target.dialogue = result.get("dialogue", [])
 
     def _check_text_analyze_ready(self, target):
         """
@@ -68,6 +68,6 @@ class TextAnalyzeContextMixin:
             target: The Material instance.
 
         Returns:
-            True if dialogue_track is populated, False otherwise.
+            True if dialogue is populated, False otherwise.
         """
-        return bool(target.dialogue_track)
+        return bool(target.dialogue)

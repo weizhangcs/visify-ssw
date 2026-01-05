@@ -39,7 +39,7 @@ def run_visual_flow_test():
     try:
         material = Material.objects.get(id=material_id)
     except Material.DoesNotExist:
-        print(f"❌ 错误：Material ID '{material_id}' 不存在。请确保该物料已存在且包含 proxy_video 和 visual_slices。")
+        print(f"❌ 错误：Material ID '{material_id}' 不存在。请确保该物料已存在且包含 proxy_video 和 slices。")
         return
 
     # 确保 Material 具备运行这两个步骤的先决条件
@@ -104,9 +104,9 @@ def run_visual_flow_test():
         if target_steps.issubset(completed_slugs):
             print("\n🎉 链路验证成功！所有步骤均已完成。")
             # 打印关键结果
-            print(f"Material Visual Slices count: {len(material.visual_slices)}")
-            if material.visual_slices and material.visual_slices[0].get("visual_contents", {}).get("frames"):
-                first_frame = material.visual_slices[0]["visual_contents"]["frames"][0]
+            print(f"Material Slices count: {len(material.slices)}")
+            if material.slices and material.slices[0].get("visual_contents", {}).get("frames"):
+                first_frame = material.slices[0]["visual_contents"]["frames"][0]
                 print(
                     f"First Slice First Frame: Path={first_frame['path']}, Quality={first_frame.get('quality_score')}"
                 )

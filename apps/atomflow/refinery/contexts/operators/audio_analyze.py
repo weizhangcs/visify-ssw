@@ -14,27 +14,27 @@ class AudioAnalyzeContextMixin:
 
         Returns:
             A dictionary containing the video path (for audio extraction) and
-            the dialogue track to be analyzed.
+            the dialogue to be analyzed.
         """
         proxy_rel = target.proxy_video
         abs_proxy_path = self.media_root / proxy_rel
 
         return {
             "video_path": str(abs_proxy_path),
-            "dialogue_track": target.dialogue_track,
+            "dialogue": target.dialogue,
         }
 
     def _handle_audio_analyze(self, target, result):
         """
         Handle the result from the AudioAnalyzerService.
 
-        Updates the Material's dialogue_track with the audio analysis results.
+        Updates the Material's dialogue with the audio analysis results.
 
         Args:
             target: The Material instance.
-            result: A dictionary containing the updated 'dialogue_track'.
+            result: A dictionary containing the updated 'dialogue'.
         """
-        target.dialogue_track = result.get("dialogue_track", [])
+        target.dialogue = result.get("dialogue", [])
 
     def _check_audio_analyze_ready(self, target):
         """
@@ -44,9 +44,9 @@ class AudioAnalyzeContextMixin:
             target: The Material instance.
 
         Returns:
-            True if proxy video and dialogue track exist, False otherwise.
+            True if proxy video and dialogue exist, False otherwise.
         """
-        return bool(target.proxy_video) and bool(target.dialogue_track)
+        return bool(target.proxy_video) and bool(target.dialogue)
 
     def _check_audio_analyze_done(self, target):
         """
@@ -56,9 +56,9 @@ class AudioAnalyzeContextMixin:
             target: The Material instance.
 
         Returns:
-            True if at least one item in the dialogue track has audio analysis data.
+            True if at least one item in the dialogue has audio analysis data.
         """
-        if not target.dialogue_track:
+        if not target.dialogue:
             return False
         # Check if at least one item has audio_analysis
-        return any(item.get("audio_analysis") for item in target.dialogue_track)
+        return any(item.get("audio_analysis") for item in target.dialogue)

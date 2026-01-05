@@ -34,8 +34,8 @@ def run_test():
         print("❌ 错误: Material 缺少 proxy_video")
         return
 
-    if not material.dialogue_track:
-        print("❌ 错误: Material 缺少 dialogue_track")
+    if not material.dialogue:
+        print("❌ 错误: Material 缺少 dialogue")
         return
 
     # 构造视频绝对路径
@@ -45,14 +45,14 @@ def run_test():
         return
 
     print(f"✅ 视频路径: {video_path}")
-    print(f"✅ 对白条目数: {len(material.dialogue_track)}")
+    print(f"✅ 对白条目数: {len(material.dialogue)}")
 
     # 2. 执行算子
     print("\n🎧 正在执行 AudioAnalyzerService (Librosa)...")
     start_ts = time.time()
 
     try:
-        updated_track = AudioAnalyzerService.run(video_path, material.dialogue_track)
+        updated_track = AudioAnalyzerService.run(video_path, material.dialogue)
     except Exception as e:
         print(f"❌ 执行失败: {e}")
         import traceback

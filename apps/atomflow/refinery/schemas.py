@@ -26,7 +26,7 @@ class SubtitleItem(BaseModel):
     Refinery 全链路标准台词单元。
 
     1. 对齐 VSS Cloud 的 SubtitleInputItem。
-    2. 作为 Material.dialogue_track 列表元素的存储标准。
+    2. 作为 Material.dialogue 列表元素的存储标准。
     """
 
     index: int = Field(..., description="行号索引")
@@ -135,7 +135,7 @@ class MultimodalSlice(BaseModel):
     """
     [核心容器] 多模态切片。
 
-    Material.visual_slices 的元素结构。
+    Material.slices 的元素结构。
     将时间轴上的一个片段聚合了视觉、听觉和文本信息。
     """
 

@@ -13,7 +13,7 @@ class CharacterRefineContextMixin:
             target: The Material instance.
 
         Returns:
-            A dictionary containing the dialogue track and asset metadata.
+            A dictionary containing the dialogue and asset metadata.
         """
         asset = getattr(target.media, "asset", None)
         lang = "zh"
@@ -21,7 +21,7 @@ class CharacterRefineContextMixin:
             lang = asset.language.split("-")[0]
 
         return {
-            "dialogue_track": target.dialogue_track,
+            "dialogue": target.dialogue,
             "video_title": target.media.title,
             "known_characters": asset.known_characters if asset else [],
             "lang": lang,
@@ -32,14 +32,14 @@ class CharacterRefineContextMixin:
         Handle the result from the CharacterRefinerService.
 
         Merges the incremental updates (speaker, reasoning) from the result
-        into the existing dialogue track.
+        into the existing dialogue.
 
         Args:
             target: The Material instance.
             result: A dictionary containing a list of 'updates'.
         """
         updates = result.get("updates", [])
-        original_track = target.dialogue_track
+        original_track = target.dialogue
 
         # Create a map for efficient lookups
         updates_map = {u.get("index"): u for u in updates if "index" in u}
@@ -58,7 +58,7 @@ class CharacterRefineContextMixin:
 
             merged_track.append(new_item)
 
-        target.dialogue_track = merged_track
+        target.dialogue = merged_track
 
     def _check_character_refine_ready(self, target):
         """
@@ -68,9 +68,9 @@ class CharacterRefineContextMixin:
             target: The Material instance.
 
         Returns:
-            True if the dialogue track is populated, False otherwise.
+            True if the dialogue is populated, False otherwise.
         """
-        return bool(target.dialogue_track)
+        return bool(target.dialogue)
 
     def _check_character_refine_done(self, target):
         """

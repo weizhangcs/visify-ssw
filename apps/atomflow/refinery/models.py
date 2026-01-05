@@ -106,8 +106,8 @@ class Material(TimeStampedModel):
     waveform_data = models.JSONField(default=list, blank=True, verbose_name=_("波形JSON"))
 
     # --- 3. 结构化生产数据 (Structured Data) ---
-    dialogue_track = models.JSONField(default=list, blank=True, verbose_name=_("结构化对白数据"))
-    visual_slices = models.JSONField(default=list, blank=True, verbose_name=_("视觉切片索引"))
+    dialogue = models.JSONField(default=list, blank=True, verbose_name=_("结构化对白数据"))
+    slices = models.JSONField(default=list, blank=True, verbose_name=_("多模态切片索引"))
 
     # 关键帧映射表：存储所有关键帧的元数据（本地路径、云端路径、分析结果等）
     # 结构参考 schemas.FrameDataInput

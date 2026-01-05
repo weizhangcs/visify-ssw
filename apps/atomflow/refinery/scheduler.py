@@ -67,8 +67,11 @@ class RefineryAtomScheduler(BaseAtomScheduler):
 
             # 2. 检查依赖
             deps = step.get("dependence", [])
-            # [Fix] 不要跳过无依赖的步骤 (如 text_analyze)
-            # 如果它们尚未执行(metrics check passed)，说明是漏发的根节点，应当被补发
+
+            # [Fix] 仅触发依赖于当前步骤的后续节点 (DAG 逻辑)
+            # 防止并行分支(如 Probe)完成时，错误地重复触发已由另一分支(如 HLS)触发的公共下游(如 Text)
+            if current_seq not in deps:
+                continue
 
             # 3. 验证所有依赖是否 SUCCESS
             dependencies_met = True

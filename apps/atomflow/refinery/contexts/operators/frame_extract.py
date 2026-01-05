@@ -29,7 +29,7 @@ class FrameExtractContextMixin:
 
         return {
             "proxy_path": str(abs_proxy_path),
-            "slices": target.visual_slices,
+            "slices": target.slices,
             "output_dir": str(abs_output_dir),
             "rel_dir": str(rel_dir),
         }
@@ -59,9 +59,9 @@ class FrameExtractContextMixin:
             target: The Material instance.
 
         Returns:
-            True if proxy video and visual slices exist, False otherwise.
+            True if proxy video and slices exist, False otherwise.
         """
-        return bool(target.proxy_video) and bool(target.visual_slices)
+        return bool(target.proxy_video) and bool(target.slices)
 
     def _check_frame_extract_done(self, target):
         """

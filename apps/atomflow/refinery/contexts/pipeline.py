@@ -17,9 +17,19 @@ class RefineryPipelineContext(BasePipelineContext):
     3. 注入必要的运行时属性（如 mode）。
     """
 
+    def __init__(self, pipeline_id):
+        super().__init__(pipeline_id)
+        self._pipeline_instance = None
+
+    @property
+    def pipeline(self):
+        if self._pipeline_instance is None:
+            self._pipeline_instance = self.get_pipeline_instance()
+        return self._pipeline_instance
+
     def get_pipeline_instance(self):
         """
-        获取具体的 Pipeline 模型实例。
+        [Internal] 从数据库加载 Pipeline 模型实例。
         预加载 rule 以优化查询，并注入缺失的 mode 属性。
         """
         pipeline = RefineryAtomPipeline.objects.select_related("rule").get(id=self.pipeline_id)

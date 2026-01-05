@@ -28,23 +28,23 @@ class AudioAnalyzerService:
     """
 
     @staticmethod
-    def run(video_path: Path, dialogue_track: List[Dict]) -> List[Dict]:
+    def run(video_path: Path, dialogue: List[Dict]) -> List[Dict]:
         """
         执行音频分析任务。
 
         Args:
             video_path: 视频文件路径 (用于提取音频)。
-            dialogue_track: 对白轨道数据。
+            dialogue: 对白数据。
 
         Returns:
-            更新后的对白轨道数据 (带有 audio_analysis)。
+            更新后的对白数据 (带有 audio_analysis)。
         """
-        if not dialogue_track:
+        if not dialogue:
             return []
 
         if librosa is None:
             logger.error("AudioAnalyzer: librosa not installed. Skipping analysis.")
-            return dialogue_track
+            return dialogue
 
         logger.info(f"AudioAnalyzer: Loading audio from {video_path}...")
 
@@ -54,11 +54,11 @@ class AudioAnalyzerService:
             y, sr = librosa.load(str(video_path), sr=16000, mono=True)
         except Exception as e:
             logger.error(f"AudioAnalyzer: Failed to load audio: {e}")
-            return dialogue_track
+            return dialogue
 
         updated_track = []
 
-        for item_dict in dialogue_track:
+        for item_dict in dialogue:
             # 确保数据结构正确
             item = SubtitleItem(**item_dict)
 

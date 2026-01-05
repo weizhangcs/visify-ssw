@@ -28,14 +28,15 @@ def run_flow_test():
     rules_json = [
         {"seq": 1, "unit_slug": "transcode", "name": "原子转码", "obligation": "REQUIRED"},
         {"seq": 2, "unit_slug": "probe", "name": "原子探测", "obligation": "REQUIRED", "dependence": [1]},
-        {"seq": 3, "unit_slug": "text_analyze", "name": "文本分析", "obligation": "REQUIRED", "dependence": [2]},
-        {"seq": 4, "unit_slug": "audio_analyze", "name": "声纹分析", "obligation": "REQUIRED", "dependence": [3]},
-        {"seq": 5, "unit_slug": "character_refine", "name": "角色精修", "obligation": "REQUIRED", "dependence": [4]},
-        {"seq": 6, "unit_slug": "slicing", "name": "视觉切片", "obligation": "REQUIRED", "dependence": [5]},
-        {"seq": 7, "unit_slug": "frame_extract", "name": "关键帧提取", "obligation": "REQUIRED", "dependence": [6]},
-        {"seq": 8, "unit_slug": "frame_probe", "name": "关键帧检测", "obligation": "REQUIRED", "dependence": [7]},
-        {"seq": 9, "unit_slug": "sync", "name": "云端同步", "obligation": "REQUIRED", "dependence": [8]},
-        {"seq": 10, "unit_slug": "visual_analyzer", "name": "视觉识别", "obligation": "REQUIRED", "dependence": [9]},
+        {"seq": 3, "unit_slug": "hls", "name": "HLS切片", "obligation": "REQUIRED", "dependence": [1]},
+        {"seq": 4, "unit_slug": "text_analyze", "name": "文本分析", "obligation": "REQUIRED", "dependence": [3]},
+        {"seq": 5, "unit_slug": "audio_analyze", "name": "声纹分析", "obligation": "REQUIRED", "dependence": [4]},
+        {"seq": 6, "unit_slug": "character_refine", "name": "角色精修", "obligation": "REQUIRED", "dependence": [5]},
+        {"seq": 7, "unit_slug": "slicing", "name": "视觉切片", "obligation": "REQUIRED", "dependence": [6]},
+        {"seq": 8, "unit_slug": "frame_extract", "name": "关键帧提取", "obligation": "REQUIRED", "dependence": [7]},
+        {"seq": 9, "unit_slug": "frame_probe", "name": "关键帧检测", "obligation": "REQUIRED", "dependence": [8]},
+        {"seq": 10, "unit_slug": "sync", "name": "云端同步", "obligation": "REQUIRED", "dependence": [9]},
+        {"seq": 11, "unit_slug": "visual_analyzer", "name": "视觉识别", "obligation": "REQUIRED", "dependence": [10]},
     ]
 
     rule, _ = RefineryAtomRule.objects.update_or_create(
@@ -46,7 +47,7 @@ def run_flow_test():
 
     # 2. 准备业务物料 (Material)
     # 自动寻找一个有源视频的 Media，如果未关联 Material 则自动创建
-    media = Media.objects.get(title="EP02")
+    media = Media.objects.get(title="001")
     if not media:
         print("❌ 错误：Media 库中没有可用的视频资源。请先在系统中上传至少一个视频文件。")
         return
