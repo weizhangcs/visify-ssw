@@ -113,6 +113,7 @@ class Material(TimeStampedModel):
     # 结构参考 schemas.FrameDataInput
     keyframe_map = models.JSONField(default=dict, blank=True, verbose_name=_("关键帧映射表"))
 
+    scenes = models.JSONField(default=list, blank=True, verbose_name=_("场景列表"))
     # --- 4. 云端锚点 (Cloud Anchors) ---
     # 记录同步到 GCS/S3 后的路径，供下游 Inference 直接引用
     cloud_proxy_path = models.CharField(max_length=1024, blank=True, null=True)

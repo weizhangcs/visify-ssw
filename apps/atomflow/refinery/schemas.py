@@ -1,4 +1,5 @@
 import uuid
+from enum import Enum
 from typing import List, Optional
 
 from pydantic import BaseModel, Field
@@ -110,21 +111,6 @@ class FrameDataOutput(BaseModel):
     # probe_data: Dict = Field(default_factory=dict, description="本地帧探测结果")
 
 
-class VisualContent(BaseModel):
-    """
-    视觉内容容器。
-    聚合了切片级别的视觉分析结果。
-    """
-
-    # frames: List[FrameData] = Field(default_factory=list, description="该切片下的关键帧") # 移除，帧数据在 keyframe_map
-    # probe_data: Dict = Field(default_factory=dict, description="本地帧探测结果（如亮度、模糊度）") # 移除，在 keyframe_map
-
-    # 最终聚合的视觉分析结果
-    frames_analysis: List[FrameDataOutput] = Field(default_factory=list, description="经过 VLM 识别后的关键帧语义结果")
-    # 切片级别的视觉摘要 (如果 Cloud VLM 提供)
-    slice_summary: Optional[str] = Field(default=None, description="切片视觉内容总结")
-
-
 class AudioContent(BaseModel):
     """音频内容容器 (占位)"""
 
@@ -144,7 +130,7 @@ class MultimodalSlice(BaseModel):
     end_time: float
     type: str = Field(..., description="visual_segment | dialogue")
     text_contents: List[SubtitleItem] = Field(default_factory=list, description="无损对白数据")
-    visual_contents: VisualContent = Field(default_factory=VisualContent)
+    visual_contents: List[FrameDataInput] = Field(default_factory=list, description="无损视觉分析数据")
     audio_contents: AudioContent = Field(default_factory=AudioContent)
 
 
@@ -160,3 +146,43 @@ class TechMeta(BaseModel):
     container: Optional[str] = None
     size: int = 0
     video: VideoStreamMeta = Field(default_factory=VideoStreamMeta)
+
+
+class SceneType(str, Enum):
+    """
+    场景类型
+    """
+
+    DIALOGUE = "dialogue"
+    ACTION = "action"
+    MONTAGE = "montage"
+    ESTABLISHING = "establishing"
+    EMOTIONAL = "emotional"
+    UNKNOWN = "unknown"
+
+
+class SceneContent(BaseModel):
+    """
+    场景业务载体
+    """
+
+    narrative_action: str = Field(..., description="叙事动作/核心事件")
+    location: Optional[str] = Field(None, description="主要地点")
+    scene_type: Optional[SceneType] = Field(default=SceneType.UNKNOWN, description="功能类型")
+    visual_mood_tags: List[str] = Field(default_factory=list, description="视觉氛围标签")
+    camera_logic: Optional[str] = Field(None, description="运镜/剪辑逻辑 (e.g., Static, Fast cuts)")
+    character_dynamics: Optional[str] = Field(None, description="角色张力/关系")
+    reason: Optional[str] = Field(None, description="AI 分组/切分的理由")
+
+
+class Scene(BaseModel):
+    """
+    [业务聚合结果] 场景单元。
+    由 SliceRegrouper 算子生成，是 Refinery 流程的最终产出之一。
+    """
+
+    scene_id: int = Field(..., description="场景的顺序 ID")
+    start_time: float = Field(..., description="场景的起始时间（秒）")
+    end_time: float = Field(..., description="场景的结束时间（秒）")
+    content: SceneContent = Field(..., description="场景的语义内容")
+    slice_ids: List[int] = Field(..., description="构成此场景的原始 MultimodalSlice ID 列表")

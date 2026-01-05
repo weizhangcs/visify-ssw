@@ -9,6 +9,7 @@ from apps.atomflow.refinery.services.frame_extractor import FrameExtractorServic
 from apps.atomflow.refinery.services.frame_probe import FrameProbeService
 from apps.atomflow.refinery.services.hls_generator import HLSService
 from apps.atomflow.refinery.services.probe import ProbeService
+from apps.atomflow.refinery.services.slice_regrouper import SliceRegrouperService
 from apps.atomflow.refinery.services.slicer import SlicingService
 from apps.atomflow.refinery.services.text_analyzer import TextAnalyzerService
 
@@ -243,6 +244,20 @@ def _dispatch_service(op_slug: str, payload: dict, target_id: str) -> dict:
         temp_file = Path(f"/tmp/visual_frames_{target_id}.json")
         try:
             result = VisualAnalyzerService.run(client, frames, lang, visual_model, temp_file)
+        finally:
+            if temp_file.exists():
+                temp_file.unlink()
+        return result
+
+    elif op_slug == "slice_regrouper":
+        client = CloudApiService()
+        slices = payload["slices"]
+        lang = payload["lang"]
+        model_name = payload.get("model_name", "models/gemini-2.5-flash")
+
+        temp_file = Path(f"/tmp/slices_regrouper_input_{target_id}.json")
+        try:
+            result = SliceRegrouperService.run(client, slices, lang, model_name, temp_file)
         finally:
             if temp_file.exists():
                 temp_file.unlink()

@@ -25,7 +25,7 @@ def run_flow_test():
     # 算子化框架必须依赖配置，我们先在数据库创建一个临时的测试规则
     # 全量编排：Transcode -> Probe -> HLS -> Text -> Char -> Slicing -> Frame -> Sync
     rules_json = [
-        {"seq": 10, "unit_slug": "visual_analyzer", "name": "视觉识别", "obligation": "REQUIRED"},
+        {"seq": 12, "unit_slug": "slice_regrouper", "name": "场景聚类", "obligation": "REQUIRED"},
     ]
 
     rule, _ = RefineryAtomRule.objects.update_or_create(
@@ -36,7 +36,7 @@ def run_flow_test():
 
     # 2. 准备业务物料 (Material)
     # 直接使用提供的 material_id
-    material_id = "eff31800-0ac6-4027-b5b2-ec0b65f5e992"
+    material_id = "d35a801c-d886-4f8a-9514-9998e120a2a8"
     try:
         material = Material.objects.get(id=material_id)
     except Material.DoesNotExist:

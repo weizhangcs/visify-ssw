@@ -1,5 +1,7 @@
 from enum import Enum
 
+# [修正] 这是一个 Django Model Enum，在 Pydantic 中我们使用 str, Enum
+
 
 class ShotType(str, Enum):
     EXTREME_CLOSE_UP = "extreme_close_up"
@@ -28,3 +30,17 @@ SHOT_TYPE_LABELS = {
     "establishing_shot": {"zh": "建立镜头", "en": "Establishing Shot"},
     "other": {"zh": "其他", "en": "Other"},
 }
+
+
+class SceneType(str, Enum):
+    """
+    场景类型
+    严格对齐 Cloud 端 ScenePreAnnotator 的 Enum 定义
+    """
+
+    DIALOGUE = "dialogue"
+    ACTION = "action"
+    MONTAGE = "montage"
+    ESTABLISHING = "establishing"
+    EMOTIONAL = "emotional"
+    UNKNOWN = "unknown"

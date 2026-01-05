@@ -37,6 +37,7 @@ def run_flow_test():
         {"seq": 9, "unit_slug": "frame_probe", "name": "关键帧检测", "obligation": "REQUIRED", "dependence": [8]},
         {"seq": 10, "unit_slug": "sync", "name": "云端同步", "obligation": "REQUIRED", "dependence": [9]},
         {"seq": 11, "unit_slug": "visual_analyzer", "name": "视觉识别", "obligation": "REQUIRED", "dependence": [10]},
+        {"seq": 12, "unit_slug": "slice_regrouper", "name": "场景聚类", "obligation": "REQUIRED", "dependence": [11]},
     ]
 
     rule, _ = RefineryAtomRule.objects.update_or_create(
@@ -47,7 +48,7 @@ def run_flow_test():
 
     # 2. 准备业务物料 (Material)
     # 自动寻找一个有源视频的 Media，如果未关联 Material 则自动创建
-    media = Media.objects.get(title="001")
+    media = Media.objects.get(title="EP02")
     if not media:
         print("❌ 错误：Media 库中没有可用的视频资源。请先在系统中上传至少一个视频文件。")
         return
@@ -92,11 +93,11 @@ def run_flow_test():
     print("-" * 60)
 
     # 5. 链路轮询监控 (Polling)
-    max_retries = 10000  # 10000 * 3s = 3000s 超时
+    max_retries = 10000  # 10000 * 5s = 50000s 超时
     target_steps = {r["unit_slug"] for r in rules_json}
 
     for i in range(max_retries):
-        time.sleep(3)
+        time.sleep(5)
 
         # 刷新数据库状态
         pipeline.refresh_from_db()

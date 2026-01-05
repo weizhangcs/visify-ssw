@@ -2,9 +2,8 @@ from typing import List, Optional
 
 from pydantic import BaseModel, Field
 
-from .audio import AudioContent
 from .dialogue import SubtitleItem
-from .visual import VisualContent
+from .visual import FrameDataInput
 
 
 class MultimodalSlice(BaseModel):
@@ -20,8 +19,7 @@ class MultimodalSlice(BaseModel):
     end_time: float
     type: str = Field(..., description="visual_segment | dialogue")
     text_contents: List[SubtitleItem] = Field(default_factory=list, description="无损对白数据")
-    visual_contents: VisualContent = Field(default_factory=VisualContent)
-    audio_contents: AudioContent = Field(default_factory=AudioContent)
+    visual_contents: List[FrameDataInput] = Field(default_factory=list, description="无损视觉分析数据")
 
 
 class VideoStreamMeta(BaseModel):

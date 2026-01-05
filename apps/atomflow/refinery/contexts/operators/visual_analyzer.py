@@ -106,6 +106,25 @@ class VisualAnalyzerContextMixin:
 
         target.keyframe_map = updated_map
 
+        # 3. [Hydration] 将视觉分析结果回填到 Material.slices
+        # 这一步将 slices 从"骨架"升级为包含视觉语义的"富切片"，为 SliceRegrouper 做好准备
+        if target.slices and target.keyframe_map:
+            updated_slices = []
+            for slice_dict in target.slices:
+                slice_id = slice_dict.get("slice_id")
+                slice_id_str = str(slice_id)
+
+                # 从 keyframe_map 获取该切片的所有帧
+                frames_data = target.keyframe_map.get(slice_id_str, [])
+
+                # [Hydration] 直接注入全量 FrameDataInput 数据，保留无损信息
+                # 结构: List[FrameDataInput dict]
+                slice_dict["visual_contents"] = frames_data
+
+                updated_slices.append(slice_dict)
+
+            target.slices = updated_slices
+
     def _check_visual_analyzer_ready(self, target):
         """
         Check if the Visual Analyzer task is ready to run.
