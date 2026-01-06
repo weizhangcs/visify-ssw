@@ -7,7 +7,6 @@ from typing import Any, List
 from django.conf import settings
 
 from ...common.baseJob import BaseJob
-from ...transcoding.jobs import TranscodingJob
 from ..schemas import SceneType  # noqa: F401
 from ..schemas import (
     AiMetadata,
@@ -104,16 +103,7 @@ class AnnotationService:
         if material and material.hls_playlist:
             video_url = AnnotationService._build_absolute_url(material.hls_playlist)
 
-        # (B) Transcoding Job (Legacy Fallback)
-        if not video_url:
-            try:
-                tj = TranscodingJob.objects.filter(media=job.media, status="COMPLETED").order_by("-modified").first()
-                if tj and tj.output_url:
-                    video_url = AnnotationService._build_absolute_url(tj.output_url)
-            except Exception:
-                pass
-
-        # (C) Raw Source
+        # (B) Raw Source (Fallback)
         if not video_url and job.media.source_video:
             video_url = AnnotationService._build_absolute_url(job.media.source_video.url)
 

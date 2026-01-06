@@ -1,9 +1,6 @@
 import logging
 from pathlib import Path
-from typing import Dict, List, Tuple
-
-import cv2
-import numpy as np
+from typing import Any, Dict, List, Tuple
 
 from ..schemas import FrameDataInput
 
@@ -33,6 +30,13 @@ class FrameProbeService:
         Returns:
             更新后的 keyframe_map。
         """
+        try:
+            import cv2
+        except ImportError:
+            raise RuntimeError(
+                "FrameProbeService: cv2 or numpy not found. This task must run on a media-enabled worker."
+            )
+
         logger.info(f"Frame Probe Start: {len(keyframe_map)} slices in keyframe_map to analyze.")
 
         # 内容缓存：基于 Digest 去重，避免对相同内容的图片重复计算
@@ -116,9 +120,7 @@ class FrameProbeService:
         return updated_keyframe_map
 
     @staticmethod
-    def _is_black_or_white_frame(
-        gray_img: np.ndarray, black_thresh=10, white_thresh=245, std_thresh=5
-    ) -> Tuple[bool, bool]:
+    def _is_black_or_white_frame(gray_img: Any, black_thresh=10, white_thresh=245, std_thresh=5) -> Tuple[bool, bool]:
         """
         [内部方法] 通过均值和标准差检测黑/白帧。
 

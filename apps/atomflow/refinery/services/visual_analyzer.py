@@ -4,7 +4,7 @@ import logging
 from pathlib import Path
 from typing import Any, Dict, List
 
-from apps.workflow.common.cloud_client import CloudApiService
+from apps.common.cloud_client import CloudApiService
 
 logger = logging.getLogger(__name__)
 

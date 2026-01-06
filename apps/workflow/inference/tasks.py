@@ -7,90 +7,13 @@ from pathlib import Path
 from celery import shared_task
 from django.core.files.base import ContentFile
 
+from apps.common.cloud_client import CloudApiService
 from apps.workflow.common.baseJob import BaseJob
-
-# 导入 Celery App 实例，用于链式调用
-from visify_ssw.celery import app as celery_app
+from apps.workflow.common.tasks import poll_cloud_task
 
 from .projects import InferenceJob
-from .services.cloud_api import CloudApiService
-
-# 注意：CreativeJob 将在函数内部动态导入以避免循环引用
-
 
 logger = logging.getLogger(__name__)
-
-
-@shared_task(
-    bind=True, name="apps.workflow.inference.tasks.poll_cloud_task_status", max_retries=50, default_retry_delay=30
-)
-def poll_cloud_task_status(self, job_id: str, cloud_task_id: int, on_complete_task_name: str, on_complete_kwargs: dict):
-    """
-    (已重构 V3.2 - 智能兼容版)
-    通用的云端任务轮询器。
-    现在可以根据回调任务名称，智能判断是 InferenceJob 还是 CreativeJob。
-    """
-    # 动态导入 CreativeJob 以避免循环依赖
-    from apps.workflow.creative.jobs import CreativeJob
-    from apps.workflow.inference.projects import InferenceJob
-
-    job = None
-    job_type_label = "Unknown"
-
-    try:
-        # --- 核心修复：智能路由逻辑 ---
-        # 如果回调任务属于 creative 应用，则去查 CreativeJob
-        if "apps.workflow.creative" in on_complete_task_name:
-            job_type_label = "CreativeJob"
-            job = CreativeJob.objects.get(id=job_id)
-        else:
-            # 否则默认为 InferenceJob
-            job_type_label = "InferenceJob"
-            job = InferenceJob.objects.get(id=job_id)
-
-    except (InferenceJob.DoesNotExist, CreativeJob.DoesNotExist):
-        logger.error(f"[PollTask] 找不到 {job_type_label} (ID: {job_id})，轮询任务终止。")
-        return
-
-    logger.info(f"[PollTask] 正在查询 {job_type_label} {job_id} 的云端任务 {cloud_task_id} 状态...")
-
-    try:
-        service = CloudApiService()
-        success, data = service.get_task_status(cloud_task_id)
-    except Exception:
-        logger.error(f"[PollTask] API查询失败 (Job: {job_id})，将在 {self.default_retry_delay} 秒后重试。", exc_info=True)
-        self.retry()  # 仅在API/网络错误时重试
-        return
-
-    if not success:
-        logger.warning(f"[PollTask] 查询云端任务 {cloud_task_id} 失败 (Job: {job_id})，将在 {self.default_retry_delay} 秒后重试。")
-        self.retry()
-        return
-
-    status = data.get("status")
-
-    if status == "COMPLETED":
-        logger.info(f"[PollTask] 云端任务 {cloud_task_id} (Job: {job_id}) 已完成。触发后续任务: {on_complete_task_name}")
-        celery_app.send_task(
-            on_complete_task_name, kwargs={"job_id": job_id, "cloud_task_data": data, **on_complete_kwargs}
-        )
-
-    elif status in ["PENDING", "RUNNING"]:
-        # 成功的查询，但任务未完成，进入下一次重试。
-        logger.info(
-            f"[PollTask] 云端任务 {cloud_task_id} (Job: {job_id}) 仍在 {status} 状态，将在 {self.default_retry_delay} 秒后重试。"
-        )
-        self.retry()  # 再次发起重试，程序会在此处停止并抛出 Retry 异常。
-
-    elif status == "FAILED":
-        logger.error(f"[PollTask] 云端任务 {cloud_task_id} (Job: {job_id}) 报告失败。")
-        job.fail()
-        job.save()
-
-    else:
-        logger.error(f"[PollTask] 云端任务 {cloud_task_id} (Job: {job_id}) 返回未知状态: '{status}'。")
-        job.fail()
-        job.save()
 
 
 @shared_task(name="apps.workflow.inference.tasks.start_rag_deployment_task")
@@ -148,11 +71,12 @@ def start_rag_deployment_task(job_id: str, **kwargs):
         job.save()
 
         # 4. 触发轮询
-        poll_cloud_task_status.delay(
+        poll_cloud_task.delay(
             job_id=job_id,
             cloud_task_id=task_data["id"],
             on_complete_task_name="apps.workflow.inference.tasks.finalize_rag_deployment",
             on_complete_kwargs={},
+            model_name="InferenceJob",  # 显式指定模型
         )
     except Exception as e:
         logger.error(f"[RAGDeploy] Job {job_id} 失败: {e}", exc_info=True)
@@ -290,11 +214,12 @@ def start_cloud_facts_task(job_id: str, **kwargs):
         job.cloud_task_id = task_data["id"]
         job.save(update_fields=["cloud_blueprint_path", "cloud_task_id", "status"])
 
-        poll_cloud_task_status.delay(
+        poll_cloud_task.delay(
             job_id=job_id,
             cloud_task_id=task_data["id"],
             on_complete_task_name="apps.workflow.inference.tasks.finalize_facts_task",
             on_complete_kwargs={},
+            model_name="InferenceJob",  # 显式指定模型
         )
     except Exception as e:
         logger.error(f"[FactsTask] Job {job_id} 失败: {e}", exc_info=True)

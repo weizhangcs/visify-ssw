@@ -8,7 +8,7 @@ from celery import shared_task
 from django.conf import settings
 from django.core.files.base import ContentFile
 
-from apps.workflow.inference.tasks import poll_cloud_task_status
+from apps.workflow.common.tasks import poll_cloud_task
 
 from .jobs import CreativeJob
 from .models import CreativeProject
@@ -49,7 +49,7 @@ def start_narration_task(project_id: str, config: dict = None, **kwargs):
         job.cloud_task_id = task_data["id"]
         job.save()
 
-        poll_cloud_task_status.delay(
+        poll_cloud_task.delay(
             job_id=job.id,
             cloud_task_id=task_data["id"],
             on_complete_task_name="apps.workflow.creative.tasks.finalize_narration_task",
@@ -138,7 +138,7 @@ def start_localize_task(project_id: str, config: dict = None, **kwargs):
         job.cloud_task_id = task_data["id"]
         job.save()
 
-        poll_cloud_task_status.delay(
+        poll_cloud_task.delay(
             job_id=job.id,
             cloud_task_id=task_data["id"],
             on_complete_task_name="apps.workflow.creative.tasks.finalize_localize_task",
@@ -222,7 +222,7 @@ def start_audio_task(project_id: str, config: dict = None, **kwargs):
         job.cloud_task_id = task_data["id"]
         job.save()
 
-        poll_cloud_task_status.delay(
+        poll_cloud_task.delay(
             job_id=job.id,
             cloud_task_id=task_data["id"],
             on_complete_task_name="apps.workflow.creative.tasks.finalize_audio_task",
@@ -306,7 +306,7 @@ def start_edit_script_task(project_id: str, **kwargs):
         job.cloud_task_id = task_data["id"]
         job.save()
 
-        poll_cloud_task_status.delay(
+        poll_cloud_task.delay(
             job_id=job.id,
             cloud_task_id=task_data["id"],
             on_complete_task_name="apps.workflow.creative.tasks.finalize_edit_script_task",

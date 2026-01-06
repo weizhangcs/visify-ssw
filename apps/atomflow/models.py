@@ -1,3 +1,3 @@
-from .refinery.models import Material, RefineryAtomPipeline, RefineryAtomRule
+from .refinery.models import Material, RefineryAtomPipeline, RefineryAtomRule, RefineryAtomUnit
 
-__all__ = [RefineryAtomRule, RefineryAtomPipeline, Material]
+__all__ = [RefineryAtomRule, RefineryAtomPipeline, Material, RefineryAtomUnit]

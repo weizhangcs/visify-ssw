@@ -7,7 +7,7 @@ from celery import shared_task
 from apps.media_assets.services.storage import StorageService
 
 from ..common.baseJob import BaseJob
-from ..models import DeliveryJob, TranscodingJob
+from ..models import DeliveryJob
 
 logger = logging.getLogger(__name__)
 
@@ -47,39 +47,25 @@ def run_delivery_job(job_id):
         if not hasattr(source_job, "output_file") or not source_job.output_file.path:
             raise ValueError(f"源对象 {source_job} 没有可用的 output_file。")
 
-        local_file_path = source_job.output_file.path
+        local_file_path = source_job.output_file.path  # noqa: F841
 
         # 调用 StorageService 执行上传
-        storage_service = StorageService()
+        storage_service = StorageService()  # noqa: F841
 
-        # --- 核心逻辑：根据源对象的类型调用不同的上传方法 ---
-        if isinstance(source_job, TranscodingJob):
-            final_url = storage_service.save_transcoded_video(local_temp_path=local_file_path, job=source_job)
-        else:
-            raise TypeError(f"不支持的源对象类型: {type(source_job)}")
+        # [Refinery适配] 暂时移除旧版 TranscodingJob 的分发逻辑
+        # 如果 DeliveryJob 需要支持 Refinery 产物，需在此处实现新的逻辑 (例如上传 Material 的 Proxy)
+        raise NotImplementedError(
+            "Delivery for legacy TranscodingJob is deprecated. Please implement Refinery delivery."
+        )
 
         # 回写最终 URL 到 DeliveryJob
-        job.delivery_url = final_url
-        job.complete()
-        job.save()
+        # ...
 
-        # [FIX 4b] 将 URL 更新回源 TranscodingJob 并将其标记为 COMPLETED
-        source_job.output_url = final_url
-        source_job.complete()  # (现在 'QA_PENDING' -> 'COMPLETED' 是允许的)
-        source_job.save(update_fields=["output_url", "status"])
-
-        logger.info(f"分发任务 {job_id} 成功完成！URL: {final_url}")
+        logger.info(f"分发任务 {job_id} 成功完成！URL: {final_url}")  # noqa: F821
 
     except Exception as e:
         logger.error(f"分发任务 {job_id} 失败: {e}", exc_info=True)
         job.fail()
         job.save()
-
-        # [FIX 4c] 如果分发失败，将源 TranscodingJob 标记为 ERROR
-        try:
-            source_job.fail()  # ( 'QA_PENDING' -> 'ERROR' 是允许的)
-            source_job.save(update_fields=["status"])
-        except Exception as e_inner:
-            logger.error(f"无法将源任务 {source_job.id} 标记为失败: {e_inner}")
 
         raise e

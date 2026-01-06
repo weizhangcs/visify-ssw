@@ -17,6 +17,45 @@ class RefineryAtomScheduler(BaseAtomScheduler):
     """
 
     @classmethod
+    def start_pipeline(cls, pipeline_id: str):
+        """
+        [Entry Point] 启动流水线：查找入口节点并点火。
+        """
+        from .models import RefineryAtomPipeline
+
+        try:
+            pipeline = RefineryAtomPipeline.objects.select_related("rule").get(id=pipeline_id)
+
+            # 1. 状态流转
+            pipeline.status = RefineryAtomPipeline.Status.RUNNING
+            # 启动时清空错误日志，以便记录新的错误
+            pipeline.error_log = ""
+            pipeline.save(update_fields=["status", "error_log"])
+
+            logger.info(f"Starting pipeline {pipeline.name} ({pipeline.id})...")
+
+            # 2. 解析规则，寻找入口 (无依赖的节点)
+            rules_config = pipeline.rule.rules_config or []
+            start_steps = []
+
+            for step in rules_config:
+                deps = step.get("dependence", [])
+                if not deps:
+                    start_steps.append(step)
+
+            if not start_steps:
+                logger.warning(f"No start steps found for pipeline {pipeline.id} in rule {pipeline.rule.name}")
+                return
+
+            # 3. 点火派发
+            for step in start_steps:
+                cls.dispatch(str(pipeline.id), step)
+
+        except Exception as e:
+            logger.error(f"Failed to start pipeline {pipeline_id}: {e}", exc_info=True)
+            raise e
+
+    @classmethod
     def dispatch(cls, target_id: str, step_config: dict):
         """
         点火：直接向指定队列发送任务。
@@ -85,3 +124,20 @@ class RefineryAtomScheduler(BaseAtomScheduler):
             if dependencies_met:
                 logger.info(f"[Atomflow] Auto-dispatching next step: {step['name']} (Seq: {step['seq']})")
                 cls.dispatch(str(pipeline.id), step)
+
+        # 5. [新增] 检查全流程是否结束
+        # 如果所有定义的步骤都在 metrics 中标记为 SUCCESS，则认为 Pipeline 完成
+        all_finished = True
+        for step in rules_config:
+            seq_str = str(step["seq"])
+            if metrics.get(seq_str, {}).get("status") != "SUCCESS":
+                all_finished = False
+                break
+
+        if all_finished:
+            from .models import RefineryAtomPipeline
+
+            if pipeline.status != RefineryAtomPipeline.Status.SUCCESS:
+                logger.info(f"Pipeline {pipeline.id} finished successfully.")
+                pipeline.status = RefineryAtomPipeline.Status.SUCCESS
+                pipeline.save(update_fields=["status"])

@@ -6,7 +6,7 @@ import re
 from pathlib import Path
 from typing import Dict, List, Optional
 
-from apps.workflow.common.cloud_client import CloudApiService
+from apps.common.cloud_client import CloudApiService
 
 from ..schemas import SubtitleItem
 

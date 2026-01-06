@@ -50,8 +50,10 @@ def get_subtitle_upload_path(instance, filename):
     return f"source_files/{instance.asset.id}/subtitles/{filename}"
 
 
+# =============================================================================
+# [Deprecated] 仅保留以兼容旧迁移文件引用 (如 0003_media_waveform_data.py)。
+# =============================================================================
 def get_waveform_upload_path(instance, filename):
-    # 存放在 source_files 下的 waveforms 目录
     return f"source_files/{instance.asset.id}/waveforms/{filename}"
 
 
@@ -117,11 +119,6 @@ class Media(TimeStampedModel):
         upload_to=get_subtitle_upload_path, blank=True, null=True, verbose_name="源字幕文件 (SRT)"
     )
 
-    # [新增] 存储波形数据 (JSON)
-    waveform_data = models.FileField(
-        upload_to=get_waveform_upload_path, blank=True, null=True, verbose_name="波形数据 (Peaks)"
-    )
-
     def __str__(self):
         return f"{self.asset.title} - {self.sequence_number:02d} - {self.title}"  # noqa: E231
 
@@ -129,29 +126,18 @@ class Media(TimeStampedModel):
         """
         [业务逻辑] 智能获取最佳播放地址 (绝对路径)。
         策略:
-        1. 如果提供了 encoding_profile，优先查找匹配且已完成的 TranscodingJob。
-        2. 如果找不到转码结果，回退到 source_video。
-        3. 强制确保返回的是指向 Nginx (9999) 的绝对 URL。
+        1. [Refinery] 优先查找 Material 的 HLS Playlist。
+        2. [Fallback] 回退到 source_video。
+        3. 强制确保返回绝对 URL。
         """
 
         target_url = None
 
-        # 1. 尝试查找转码任务
-        if encoding_profile:
-            try:
-                # [延迟导入] 避免 Circular Import (Media <-> TranscodingJob)
-                from apps.workflow.transcoding.jobs import TranscodingJob
-
-                job = (
-                    TranscodingJob.objects.filter(media=self, profile=encoding_profile, status="COMPLETED")
-                    .order_by("-modified")
-                    .first()
-                )
-
-                if job and job.output_url:
-                    target_url = job.output_url
-            except Exception as e:
-                logger.warning(f"查找转码任务失败: {e}")
+        # 1. 尝试查找 Refinery Material (HLS)
+        # Material 通过 OneToOne 关联到 Media，related_name="material"
+        if hasattr(self, "material") and self.material.hls_playlist:
+            # material.hls_playlist 通常存储相对路径，ensure_absolute_url 会处理
+            target_url = self.material.hls_playlist
 
         # 2. 兜底策略：使用源文件
         if not target_url and self.source_video:
@@ -183,31 +169,13 @@ class Media(TimeStampedModel):
         """
         [新增] 获取最佳处理源文件的物理路径 (用于 AI/CV 处理)。
         策略:
-        1. 优先查找已完成的转码任务产出的 Proxy MP4 (体积小，解码快)。
-        2. 兜底使用 source_video (原始母带)。
+        1. [TODO] 未来可对接 Material 的 Proxy Video (需处理路径映射)。
+        2. [Fallback] 目前兜底使用 source_video (原始母带)。
 
         注意：返回的是文件系统的绝对路径 (path)，而非 URL。
         """
         target_path = None
 
-        # 1. 尝试查找转码任务 (Proxy)
-        try:
-            # 延迟导入避免循环依赖
-            from apps.workflow.transcoding.jobs import TranscodingJob
-
-            # 查找该 Media 下最新完成的转码任务
-            job = TranscodingJob.objects.filter(media=self, status="COMPLETED").order_by("-modified").first()
-
-            # TranscodingJob.output_file 存储的是 Proxy MP4 的路径
-            if job and job.output_file:
-                # 确认文件物理存在
-                if job.output_file.storage.exists(job.output_file.name):
-                    target_path = job.output_file.path
-                    logger.info(f"Using Proxy Video for processing: {target_path}")
-        except Exception as e:
-            logger.warning(f"Error resolving transcoding job for media {self.id}: {e}")
-
-        # 2. 兜底策略：使用源文件
         if not target_path and self.source_video:
             try:
                 target_path = self.source_video.path

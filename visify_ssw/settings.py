@@ -224,19 +224,26 @@ CELERY_RESULT_BACKEND = config("CELERY_BROKER_URL", default="redis://redis:6379/
 CELERY_ACCEPT_CONTENT = ["json"]
 CELERY_TASK_SERIALIZER = "json"
 CELERY_RESULT_SERIALIZER = "json"
-CELERY_IMPORTS = (
+
+CELERY_IMPORTS = [
     "apps.media_assets.tasks",
-    "apps.workflow.transcoding.tasks",
     "apps.workflow.delivery.tasks",
     "apps.workflow.annotation.tasks",
     "apps.workflow.inference.tasks",
     "apps.workflow.creative.tasks",
-    "apps.workflow.character_annotation.tasks",
-    "apps.workflow.scene_annotation.tasks",
     "apps.workflow.common.tasks",
-    # [新增] 注册 atomflow 旁路任务模块
-    "apps.atomflow.refinery.tasks",
-)
+]
+
+# [Fix] 仅在环境具备 numpy (即 Media Worker) 时加载 Refinery 任务
+# 防止 Default Worker 因缺少依赖而启动失败
+try:
+    import numpy  # noqa: F401
+
+    CELERY_IMPORTS.append("apps.atomflow.refinery.tasks")
+except ImportError:
+    pass
+
+CELERY_IMPORTS = tuple(CELERY_IMPORTS)
 
 # 定义队列
 CELERY_TASK_DEFAULT_QUEUE = "default"
@@ -254,8 +261,6 @@ CELERY_TASK_QUEUES = {
 # 定义路由规则 (Router)
 CELERY_TASK_ROUTES = {
     # 1. 媒体处理任务 -> media_queue
-    "apps.workflow.transcoding.tasks.run_transcoding_job": {"queue": "media_queue"},
-    "apps.workflow.transcoding.tasks.generate_waveform": {"queue": "media_queue"},
     "apps.workflow.creative.tasks.start_synthesis_task": {"queue": "media_queue"},
     "apps.workflow.creative.tasks.finalize_synthesis_task": {"queue": "media_queue"},
     # [新增] 注册 atomflow 旁路原子任务路由
@@ -343,24 +348,9 @@ UNFOLD = {
                 "separator": True,
                 "items": [
                     {
-                        "title": "转码项目",
-                        "icon": "movie_filter",
-                        "link": reverse_lazy("admin:workflow_transcodingproject_changelist"),
-                    },
-                    {
-                        "title": "角色标注项目",  # Character Annotation 入口
-                        "icon": "face",
-                        "link": reverse_lazy("admin:workflow_characterannotationproject_changelist"),
-                    },
-                    {
-                        "title": "场景标注项目",  # Scene Annotation 入口
-                        "icon": "auto_awesome_motion",
-                        "link": reverse_lazy("admin:workflow_sceneannotationproject_changelist"),
-                    },
-                    {
-                        "title": "转码任务",
-                        "icon": "history",
-                        "link": reverse_lazy("admin:workflow_transcodingjob_changelist"),
+                        "title": "精炼流水线",
+                        "icon": "precision_manufacturing",
+                        "link": reverse_lazy("admin:atomflow_refineryatompipeline_changelist"),
                     },
                     {
                         "title": "转码配置",

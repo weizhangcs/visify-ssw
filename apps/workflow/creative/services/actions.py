@@ -7,10 +7,10 @@ from typing import Tuple
 
 from django.core.files.base import ContentFile
 
+from apps.common.cloud_client import CloudApiService
 from apps.workflow.common.baseJob import BaseJob
 from apps.workflow.creative.jobs import CreativeJob
 from apps.workflow.creative.models import CreativeProject
-from apps.workflow.inference.services.cloud_api import CloudApiService
 from visify_ssw import settings
 
 logger = logging.getLogger(__name__)

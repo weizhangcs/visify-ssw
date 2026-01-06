@@ -17,7 +17,7 @@ from apps.atomflow.refinery.services.text_analyzer import TextAnalyzerService
 from apps.atomflow.refinery.services.transcoder import TranscodeService
 from apps.atomflow.refinery.services.uploader import TicketUploader
 from apps.atomflow.refinery.services.visual_analyzer import VisualAnalyzerService
-from apps.workflow.common.cloud_client import CloudApiService
+from apps.common.cloud_client import CloudApiService
 
 from .contexts.atomic import RefineryAtomicContext
 from .contexts.pipeline import RefineryPipelineContext

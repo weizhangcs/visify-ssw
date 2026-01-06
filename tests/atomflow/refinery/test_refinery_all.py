@@ -37,7 +37,6 @@ def run_flow_test():
         {"seq": 9, "unit_slug": "frame_probe", "name": "关键帧检测", "obligation": "REQUIRED", "dependence": [8]},
         {"seq": 10, "unit_slug": "sync", "name": "云端同步", "obligation": "REQUIRED", "dependence": [9]},
         {"seq": 11, "unit_slug": "visual_analyzer", "name": "视觉识别", "obligation": "REQUIRED", "dependence": [10]},
-        {"seq": 12, "unit_slug": "slice_regrouper", "name": "场景聚类", "obligation": "REQUIRED", "dependence": [11]},
     ]
 
     rule, _ = RefineryAtomRule.objects.update_or_create(

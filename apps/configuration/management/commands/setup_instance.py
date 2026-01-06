@@ -6,7 +6,8 @@ from decouple import config
 from django.contrib.auth.models import User
 from django.core.management.base import BaseCommand, CommandError, CommandParser
 
-from apps.configuration.models import EncodingProfile, IntegrationSettings  # [修改] 导入 IntegrationSettings
+from apps.atomflow.refinery.models import RefineryAtomRule
+from apps.configuration.models import EncodingProfile, IntegrationSettings
 
 
 class Command(BaseCommand):
@@ -21,6 +22,7 @@ class Command(BaseCommand):
         self.stdout.write(self.style.SUCCESS("🚀 Starting Visify Story Studio instance setup..."))
         self._create_django_superuser()
         self._create_default_encoding_profile()
+        self._create_default_refinery_rule()
         self._update_integration_settings(options)
         self.stdout.write(self.style.SUCCESS("✅✅✅ Instance setup completed successfully! ✅✅✅"))
         self.stdout.write("You can now log in using the username and password you provided.")
@@ -125,3 +127,45 @@ class Command(BaseCommand):
             self.stdout.write(self.style.SUCCESS(f"Created default Encoding Profile: '{name}'."))
         else:
             self.stdout.write(self.style.WARNING(f"Updated existing Encoding Profile: '{name}' to be the default."))
+
+    def _create_default_refinery_rule(self):
+        """
+        [新增] 创建默认的 Refinery Pipeline 规则
+        """
+        self.stdout.write("🛠️  Creating default Refinery Pipeline Rule...")
+
+        rules_json = [
+            {"seq": 1, "unit_slug": "transcode", "name": "原子转码", "obligation": "REQUIRED"},
+            {"seq": 2, "unit_slug": "probe", "name": "原子探测", "obligation": "REQUIRED", "dependence": [1]},
+            {"seq": 3, "unit_slug": "hls", "name": "HLS切片", "obligation": "REQUIRED", "dependence": [1]},
+            {"seq": 4, "unit_slug": "text_analyze", "name": "文本分析", "obligation": "REQUIRED", "dependence": [3]},
+            {"seq": 5, "unit_slug": "audio_analyze", "name": "声纹分析", "obligation": "REQUIRED", "dependence": [4]},
+            {"seq": 6, "unit_slug": "character_refine", "name": "角色精修", "obligation": "REQUIRED", "dependence": [5]},
+            {"seq": 7, "unit_slug": "slicing", "name": "视觉切片", "obligation": "REQUIRED", "dependence": [6]},
+            {"seq": 8, "unit_slug": "frame_extract", "name": "关键帧提取", "obligation": "REQUIRED", "dependence": [7]},
+            {"seq": 9, "unit_slug": "frame_probe", "name": "关键帧检测", "obligation": "REQUIRED", "dependence": [8]},
+            {"seq": 10, "unit_slug": "sync", "name": "云端同步", "obligation": "REQUIRED", "dependence": [9]},
+            {"seq": 11, "unit_slug": "visual_analyzer", "name": "视觉识别", "obligation": "REQUIRED", "dependence": [10]},
+            {"seq": 12, "unit_slug": "slice_regrouper", "name": "场景聚类", "obligation": "REQUIRED", "dependence": [11]},
+        ]
+
+        slug = "default_full_refinery_v1"
+        name = "全量媒资精炼编排"
+
+        try:
+            rule, created = RefineryAtomRule.objects.update_or_create(
+                slug=slug,
+                defaults={
+                    "name": name,
+                    "description": "系统默认的全量精炼流程，包含从转码到场景聚类的所有步骤。",
+                    "rules_config": rules_json,
+                    "mode": "PROD",
+                },
+            )
+
+            if created:
+                self.stdout.write(self.style.SUCCESS(f"Created default Refinery Rule: '{name}'."))
+            else:
+                self.stdout.write(self.style.WARNING(f"Updated default Refinery Rule: '{name}'."))
+        except Exception as e:
+            raise CommandError(f"Error creating/updating default Refinery Rule: {e}")
