@@ -455,6 +455,7 @@ const AnnotationWorkbench = () => {
                             track={selectedContext?.track}
                             onUpdate={handleActionUpdate}
                             onDelete={handleActionDelete}
+                            characterList={originalMeta?.character_list || []}
                         />
                     </div>
                 </div>
@@ -493,6 +494,7 @@ const AnnotationWorkbench = () => {
                             videoUrl={originalMeta?.source_path}
                             onCreate={handleCreateClip}
                             waveformUrl={originalMeta?.waveform_url}
+                            waveformData={originalMeta?.waveform_data}
                         />
                     </div>
                 </div>

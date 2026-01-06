@@ -180,7 +180,8 @@ class MediaAnnotation(BaseModel):
     file_name: str
     source_path: str
     sequence_number: int
-    waveform_url: Optional[str] = None
+    waveform_data: Optional[List[float]] = None
+    character_list: List[str] = Field(default_factory=list, description="全剧角色列表(辅助数据)")
 
     scenes: List[SceneItem] = []
     dialogues: List[DialogueItem] = []

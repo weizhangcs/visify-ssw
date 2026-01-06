@@ -94,7 +94,8 @@ const SimpleTimeline = ({
                             onSelect,
                             onCreate,
                             videoUrl,
-                            waveformUrl
+                            waveformUrl,
+                            waveformData
                         }) => {
     const containerRef = useRef(null);
     const [scrollLeft, setScrollLeft] = useState(0);
@@ -275,7 +276,7 @@ const SimpleTimeline = ({
                     <div className="sticky left-0 z-20 w-24 h-full flex items-center px-2 bg-gray-800/80 border-r border-gray-700 text-xs text-gray-400 font-bold backdrop-blur-sm">
                         AUDIO
                     </div>
-                    <Waveform url={videoUrl} waveformUrl={waveformUrl} scale={scale} height={WAVEFORM_HEIGHT} />
+                    <Waveform url={videoUrl} waveformUrl={waveformUrl} waveformData={waveformData} scale={scale} height={WAVEFORM_HEIGHT} />
                 </div>
 
                 {/* 3. 轨道区域 */}

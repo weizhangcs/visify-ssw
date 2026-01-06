@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import WaveSurfer from 'wavesurfer.js';
 
-const Waveform = ({ url, waveformUrl, scale, height = 60 }) => {
+const Waveform = ({ url, waveformUrl, waveformData, scale, height = 60 }) => {
     const containerRef = useRef(null);
     const wavesurfer = useRef(null);
     const [isReady, setIsReady] = useState(false);
@@ -36,6 +36,13 @@ const Waveform = ({ url, waveformUrl, scale, height = 60 }) => {
 
         // [关键 2] 核心加载逻辑分支
         const initWaveform = async () => {
+            // 策略 0: 直接传入了波形数据 (Array)
+            if (waveformData && Array.isArray(waveformData) && waveformData.length > 0) {
+                ws.load(url, [waveformData]);
+                console.log('[Waveform] Loaded using direct waveformData');
+                return;
+            }
+
             // 策略 A: 如果有预生成的波形数据 (JSON)，优先使用
             if (waveformUrl) {
                 try {
@@ -81,7 +88,7 @@ const Waveform = ({ url, waveformUrl, scale, height = 60 }) => {
                 wavesurfer.current = null;
             }
         };
-    }, [url, waveformUrl]); // [修正] 依赖列表中加入 waveformUrl
+    }, [url, waveformUrl, waveformData]); // [修正] 依赖列表中加入 waveformData
 
     // 响应缩放
     useEffect(() => {

@@ -211,8 +211,8 @@ class AnnotationProjectAdmin(ModelAdmin):
         job_items = []
         for job in jobs_queryset:
             download_url = None
-            if job.annotation_file:
-                download_url = job.annotation_file.url
+            # [Refinery适配] JSONField 模式下暂不支持直接文件下载，后续可改为 API 导出链接
+            # download_url = ...
 
             job_items.append(
                 {

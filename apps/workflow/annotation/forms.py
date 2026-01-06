@@ -33,4 +33,5 @@ class AnnotationProjectForm(forms.ModelForm):
 
         # 确保创建时必须选择编码配置
         if "source_encoding_profile" in self.fields:
-            self.fields["source_encoding_profile"].required = True
+            # [Legacy Fix] 不再强制要求
+            self.fields["source_encoding_profile"].required = False

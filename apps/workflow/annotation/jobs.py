@@ -2,7 +2,6 @@
 
 import logging
 
-from django.core.files.base import ContentFile
 from django.core.files.storage import FileSystemStorage
 from django.db import models
 from django_fsm import transition
@@ -13,13 +12,18 @@ from ..common.baseJob import BaseJob
 
 logger = logging.getLogger(__name__)
 
-# 定义存储位置 (保持原有的 Docker 卷映射逻辑)
+# =============================================================================
+# [Deprecated] 仅保留以兼容旧迁移文件引用 (如 0002_...)。
+# 新业务逻辑已迁移至 JSONField，请勿在新代码中使用以下对象。
+# =============================================================================
 fs = FileSystemStorage(location="/app/media_root")
 
 
 def get_annotation_upload_path(instance, filename):
-    # 动态路径: annotation/<project_id>/jobs/<job_id>_<filename>
     return f"annotation/{instance.project.id}/jobs/{instance.id}_{filename}"
+
+
+# =============================================================================
 
 
 class AnnotationJob(BaseJob):
@@ -39,43 +43,31 @@ class AnnotationJob(BaseJob):
     # --- 核心产出物 (SSOT) ---
 
     # 1. Current (当前工作版本)
-    annotation_file = models.FileField(
-        storage=fs, upload_to=get_annotation_upload_path, blank=True, null=True, verbose_name="标注工程文件 (Current)"
-    )
+    # [变更] 改为 JSONField (PostgreSQL jsonb)，不再使用文件存储
+    data = models.JSONField(default=dict, blank=True, verbose_name="标注数据 (Current)", help_text="当前工作区的全量标注数据")
 
     # 2. Backup (上一版本/修订前快照)
-    # [新增] 用于支持 A/B 轮转和 Revise 回滚
-    annotation_file_backup = models.FileField(
-        storage=fs, upload_to=get_annotation_upload_path, blank=True, null=True, verbose_name="标注工程文件 (Backup)"
-    )
+    data_backup = models.JSONField(default=dict, blank=True, verbose_name="标注数据 (Backup)", help_text="上一次保存或修订前的快照")
 
     # --- 基础设施: A/B 轮转逻辑 ---
 
-    def rotate_and_save(self, content_str: str, save_to_db: bool = True):
+    def rotate_and_save(self, new_data: dict, save_to_db: bool = True):
         """
         [Job级 A/B 轮转]
         当保存新的标注数据时调用：
         1. Current -> Backup
         2. New -> Current
         """
-        # 1. 备份 Current -> Backup
-        if self.annotation_file:
-            try:
-                self.annotation_file.open("rb")
-                existing_content = self.annotation_file.read()
-                self.annotation_file.close()
-
-                if existing_content:
-                    backup_filename = f"job_{self.id}_backup.json"
-                    self.annotation_file_backup.save(backup_filename, ContentFile(existing_content), save=False)
-            except Exception as e:
-                logger.warning(f"Job {self.id}: Failed to rotate backup: {e}")
+        # 1. 备份 Current -> Backup (内存操作)
+        if self.data:
+            self.data_backup = self.data
 
         # 2. 写入 New -> Current
-        new_filename = f"job_{self.id}_annotation.json"
-        self.annotation_file.save(
-            new_filename, ContentFile(content_str.encode("utf-8")), save=save_to_db  # 由调用者决定是否立即落盘
-        )
+        self.data = new_data
+
+        # 3. 落盘
+        if save_to_db:
+            self.save(update_fields=["data", "data_backup", "modified"])
 
     def rollback_to_backup(self):
         """
@@ -83,16 +75,13 @@ class AnnotationJob(BaseJob):
         当用户点击“放弃修订”或“回退”时调用。
         将 Backup 覆盖回 Current。
         """
-        if not self.annotation_file_backup:
+        if not self.data_backup:
             return False, "No backup available."
 
         try:
-            self.annotation_file_backup.open("rb")
-            backup_content = self.annotation_file_backup.read()
-            self.annotation_file_backup.close()
-
             # 覆盖 Current
-            self.annotation_file.save(f"job_{self.id}_annotation.json", ContentFile(backup_content), save=True)
+            self.data = self.data_backup
+            self.save(update_fields=["data", "modified"])
             return True, "Rollback successful."
         except Exception as e:
             return False, str(e)
@@ -125,20 +114,10 @@ class AnnotationJob(BaseJob):
         这样如果修订改乱了，用户可以用 rollback_to_backup 恢复到 COMPLETED 时的状态。
         """
         # 显式触发一次“原地轮转”：把 Current 复制给 Backup，Current 保持不变
-        if self.annotation_file:
-            try:
-                self.annotation_file.open("rb")
-                content = self.annotation_file.read()
-                self.annotation_file.close()
-
-                # 写入 Backup
-                self.annotation_file_backup.save(
-                    f"job_{self.id}_revise_backup.json",
-                    ContentFile(content),
-                    save=False,  # 状态转换通常会在 View 层调 save()，这里先更新内存
-                )
-            except Exception as e:
-                logger.warning(f"Job {self.id}: Failed to create revise backup: {e}")
+        if self.data:
+            self.data_backup = self.data
+            # 这里不立即 save，因为状态转换通常会在 View 层调 save()
+            # 但为了保险起见，如果 django-fsm 不自动保存字段，可能需要手动处理
 
         # 状态变更交给 django-fsm
         super().revise()

@@ -48,7 +48,7 @@ class AnnotationProject(BaseProject):
         "configuration.EncodingProfile",
         on_delete=models.PROTECT,
         null=True,
-        blank=False,
+        blank=True,  # [Legacy Fix] 允许为空，不再强制要求
         verbose_name="源编码配置",
         help_text="选择一个编码配置。标注工具将使用此配置转码后的视频，以加快加载速度。",
     )
@@ -94,8 +94,8 @@ class AnnotationProject(BaseProject):
     def _get_valid_jobs(self):
         """辅助方法：获取当前项目下所有有效的标注任务"""
         return (
-            self.jobs.filter(annotation_file__isnull=False)
-            .exclude(annotation_file="")
+            # [Refinery适配] 改为检查 JSON 数据是否为空
+            self.jobs.exclude(data={})
             .select_related("media")
             .order_by("media__sequence_number")
         )
