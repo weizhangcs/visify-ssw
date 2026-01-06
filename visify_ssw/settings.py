@@ -310,6 +310,11 @@ CORS_ALLOW_HEADERS = ["accept", "authorization", "content-type", "user-agent", "
 FFMPEG_VIDEO_BITRATE = config("FFMPEG_VIDEO_BITRATE", default="2M")
 FFMPEG_VIDEO_PRESET = config("FFMPEG_VIDEO_PRESET", default="fast")
 
+# 5. 请求体大小限制 (Request Body Size Limit)
+# 默认是 2.5MB。由于 Annotation Workbench 保存时会提交包含 waveform_data (可能很大)
+# 和大量 scenes/dialogues 的 JSON，容易超限。此处调整为 50MB。
+DATA_UPLOAD_MAX_MEMORY_SIZE = 52428800  # 50 MB
+
 # ----------------------------------------------------------------------
 # IX. ADMIN/UNFOLD 配置 (ADMIN/UNFOLD CONFIGURATION)
 # ----------------------------------------------------------------------

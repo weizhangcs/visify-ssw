@@ -208,22 +208,26 @@ class AnnotationService:
         for s in refinery_scenes:
             s_data = s.model_dump() if hasattr(s, "model_dump") else (s if isinstance(s, dict) else {})
 
+            # [Fix] 适配 Refinery 嵌套结构: 业务字段可能位于 'content' 键下
+            # 结构示例: { "start_time": 100, "content": { "narrative_action": "...", ... } }
+            business_source = s_data.get("content") if isinstance(s_data.get("content"), dict) else s_data
+
             # 简单的类型映射，如果字符串不匹配，Schema 会 fallback 到 UNKNOWN
-            raw_type = s_data.get("scene_type", "unknown")
+            raw_type = business_source.get("scene_type", "unknown")
 
             items.append(
                 SceneItem(
                     start=s_data.get("start_time", 0.0),
                     end=s_data.get("end_time", 0.0),
                     content=SceneContent(
-                        narrative_action=s_data.get("narrative_action", "未定义动作"),
-                        label=s_data.get("narrative_action", "Scene")[:20],  # 简易截断作为标题
-                        location=s_data.get("location"),
+                        narrative_action=business_source.get("narrative_action", "未定义动作"),
+                        label=business_source.get("narrative_action", "Scene")[:20],  # 简易截断作为标题
+                        location=business_source.get("location"),
                         scene_type=raw_type,  # Pydantic 会尝试转换 Enum
-                        visual_mood_tags=s_data.get("visual_mood_tags", []),
-                        camera_logic=s_data.get("camera_logic"),
-                        reason=s_data.get("reason"),
-                        character_dynamics=s_data.get("character_dynamics"),
+                        visual_mood_tags=business_source.get("visual_mood_tags", []),
+                        camera_logic=business_source.get("camera_logic"),
+                        reason=business_source.get("reason"),
+                        character_dynamics=business_source.get("character_dynamics"),
                         description="",
                     ),
                     context=ItemContext(id=str(uuid.uuid4()), origin=DataOrigin.AI_CV, is_verified=False),

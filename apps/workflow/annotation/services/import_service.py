@@ -73,6 +73,10 @@ class ProjectImportService:
                 # 确保 sequence_number 在新项目中也是正确的 (即使是 Case B 回退的情况)
                 item_data["sequence_number"] = target_media.sequence_number
 
+                # [Optimization] 如果导入数据中包含 waveform_data (旧版本导出)，将其移除
+                # 强制使用当前环境 Material 的波形数据
+                item_data.pop("waveform_data", None)
+
                 # 创建 Job
                 job = AnnotationJob.objects.create(project=new_project, media=target_media, status="COMPLETED")
 

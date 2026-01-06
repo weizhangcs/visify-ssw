@@ -114,7 +114,7 @@ export const transformFromTracks = (tracks, originalMeta) => {
         return track ? track.actions.map(a => reconstructItem(a, id)) : [];
     };
 
-    return {
+    const payload = {
         ...originalMeta,
         updated_at: new Date().toISOString(),
         scenes: getActionsByTrackId('scenes'),
@@ -122,4 +122,12 @@ export const transformFromTracks = (tracks, originalMeta) => {
         captions: getActionsByTrackId('captions'),
         highlights: getActionsByTrackId('highlights')
     };
+
+    // [Optimization] 移除 waveform_data，避免回传大量静态数据
+    // 后端会在 load_annotation 时从 Material 重新注入，无需在 Job.data 中冗余存储
+    if (payload.waveform_data) {
+        delete payload.waveform_data;
+    }
+
+    return payload;
 };

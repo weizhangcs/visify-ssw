@@ -21,9 +21,23 @@ logger = logging.getLogger(__name__)
 def annotation_workbench_entry(request, job_id):
     job = get_object_or_404(AnnotationJob, pk=job_id)
 
+    # [状态联动] 进入标注台时的状态流转
+    job_status_changed = False
+
     if job.status == "PENDING":
         job.start_annotation()
+        job_status_changed = True
+    elif job.status == "COMPLETED":
+        # 如果已完成的任务再次被打开，视为“修订”
+        job.revise()  # 状态变为 REVISING，并触发数据备份
+        job_status_changed = True
+
+    if job_status_changed:
         job.save()
+        # 如果任务状态回退了，项目状态也应该回退 (不再是已完成)
+        if job.project.status == "COMPLETED":
+            job.project.status = "PROCESSING"
+            job.project.save(update_fields=["status"])
 
     server_data = {}  # [修改] 默认类型改为字典
 

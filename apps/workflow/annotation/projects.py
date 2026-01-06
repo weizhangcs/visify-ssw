@@ -94,10 +94,9 @@ class AnnotationProject(BaseProject):
     def _get_valid_jobs(self):
         """辅助方法：获取当前项目下所有有效的标注任务"""
         return (
-            # [Refinery适配] 改为检查 JSON 数据是否为空
-            self.jobs.exclude(data={})
-            .select_related("media")
-            .order_by("media__sequence_number")
+            # [Refinery适配] 返回所有关联了 Media 的任务。
+            # 即使 job.data 为空（冷启动状态），AnnotationService 也能从 Material 读取数据，因此它们也是有效的审计/导出对象。
+            self.jobs.select_related("media").order_by("media__sequence_number")
         )
 
     def _rotate_and_save(self, content_str: str, file_prefix: str, current_field_name: str, backup_field_name: str):
@@ -162,6 +161,10 @@ class AnnotationProject(BaseProject):
             try:
                 # 获取全量数据
                 media_anno = AnnotationService.load_annotation(job)
+
+                # [Optimization] 导出时移除 waveform_data，减小文件体积
+                # 导入时会自动从目标环境的 Material 重新注入，无需在工程文件中携带
+                media_anno.waveform_data = None
                 project_anno.annotations[media_anno.media_id] = media_anno
             except Exception as e:
                 logger.error(f"Project Export Error on Job {job.id}: {e}")
@@ -244,6 +247,7 @@ class AnnotationProject(BaseProject):
         这是一个复合原子操作：
         1. 重新生成 Blueprint (确保发给 Cloud 的是最新数据)
         2. 执行 Audit (确保 UI 看到的是最新数据)
+        3. [新增] 标记项目为已完成 (COMPLETED)
         """
 
         from .services.audit_service import ArtifactAuditService
@@ -256,6 +260,22 @@ class AnnotationProject(BaseProject):
         report_data = ArtifactAuditService.audit_project(self)
 
         json_output = json.dumps(report_data, indent=2, ensure_ascii=False)
+
+        # 3. [新增] 更新项目状态为 COMPLETED
+        # 只要触发了审计，就意味着用户认为当前阶段工作已完成，准备交付
+        if self.status != "COMPLETED":
+            self.status = "COMPLETED"
+            # 注意：后续的 _rotate_and_save 会触发 instance.save()，从而持久化 status 变更
+
+            # [状态联动] 项目完成 -> 所有任务完成
+            # 遍历所有非 COMPLETED 的任务，强制执行完成转换
+            for job in self.jobs.all():
+                if job.status != "COMPLETED":
+                    try:
+                        job.complete_annotation()
+                        job.save()
+                    except Exception as e:
+                        logger.warning(f"Auto-complete job {job.id} failed during project audit: {e}")
 
         # [修改] 使用 A/B 轮转
         self._rotate_and_save(

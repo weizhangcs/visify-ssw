@@ -2,6 +2,8 @@ import logging
 from collections import defaultdict
 from typing import Any, Dict, List
 
+from ..schemas import DataOrigin
+
 # 引用 AnnotationService 用于加载 Job 数据
 from .annotation_service import AnnotationService
 
@@ -53,28 +55,46 @@ class ArtifactAuditService:
             try:
                 # [1. 技术审计] 加载 Schema
                 media_anno = AnnotationService.load_annotation(job)
-                business_data = media_anno.get_clean_business_data()
 
                 # [2. 工程统计]
                 current_duration = media_anno.duration
-
                 audit_report["engineering_stats"]["total_duration"] += current_duration
 
-                # [3. 数据分流] 收集轨道数据
-                for track_name, items in business_data.items():
-                    if isinstance(items, list):
-                        audit_report["engineering_stats"]["track_counts"][track_name] += len(items)
+                # [3. 数据分流 & 统计]
+                # 直接遍历 Pydantic 对象以访问 Context 信息
 
-                        # 场景：需要保证全局唯一 ID，因为不同 Job 的场景 ID 可能重复
-                        if track_name == "scenes":
-                            for s in items:
-                                # 注入唯一 ID，格式: job_id + scene_id
-                                s["_unique_id"] = f"{job.id}_{s.get('id')}"
-                                all_scenes_pool.append(s)
+                def process_track_stats(track_name, items):
+                    """更新计数并统计 AI/Human 来源"""
+                    count = len(items)
+                    audit_report["engineering_stats"]["track_counts"][track_name] += count
 
-                        # 对白：收集起来后续匹配
-                        elif track_name in ["dialogues", "captions"]:
-                            all_dialogues_pool.extend(items)
+                    for item in items:
+                        if item.context.origin == DataOrigin.HUMAN:
+                            audit_report["engineering_stats"]["ai_vs_human"]["human_modified"] += 1
+                        else:
+                            audit_report["engineering_stats"]["ai_vs_human"]["ai_modified"] += 1
+
+                # A. Scenes
+                process_track_stats("scenes", media_anno.scenes)
+                for s in media_anno.scenes:
+                    # 扁平化为 Dict 供语义算法使用
+                    flat_s = {
+                        "start": s.start,
+                        "end": s.end,
+                        **s.content.model_dump(),
+                        "_unique_id": f"{job.id}_{s.context.id}",
+                    }
+                    all_scenes_pool.append(flat_s)
+
+                # B. Dialogues
+                process_track_stats("dialogues", media_anno.dialogues)
+                for d in media_anno.dialogues:
+                    flat_d = {"start": d.start, "end": d.end, **d.content.model_dump()}
+                    all_dialogues_pool.append(flat_d)
+
+                # C. Others (仅统计)
+                process_track_stats("captions", media_anno.captions)
+                process_track_stats("highlights", media_anno.highlights)
 
             except Exception as e:
                 error_msg = f"Job {job.id} 加载失败: {str(e)}"

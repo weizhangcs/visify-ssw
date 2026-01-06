@@ -96,6 +96,7 @@ class AnnotationJob(BaseJob):
     @transition(
         field="status",
         source=[
+            BaseJob.STATUS.PENDING,  # [Fix] 允许未开始的任务直接被项目审计批量完成
             BaseJob.STATUS.PROCESSING,
             BaseJob.STATUS.REVISING,
             BaseJob.STATUS.ERROR,
