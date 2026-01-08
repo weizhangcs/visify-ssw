@@ -6,17 +6,25 @@ from typing import Any, List
 
 from django.conf import settings
 
-from ...common.baseJob import BaseJob
-from ..schemas import SceneType  # noqa: F401
-from ..schemas import (
-    AiMetadata,
-    DataOrigin,
-    DialogueContent,
-    DialogueItem,
+from apps.common.schemas.annotation.workbench import AiMetadata, DataOrigin, DialogueContent, DialogueItem  # noqa: F401
+from apps.common.schemas.annotation.workbench import HighlightType as WbHighlightType  # noqa: F401
+from apps.common.schemas.annotation.workbench import (  # noqa: F401
     ItemContext,
     MediaAnnotation,
     SceneContent,
     SceneItem,
+    SceneType,
+)
+from apps.common.schemas.narrative_dataset import CaptionItem as CommonCaptionItem
+from apps.common.schemas.narrative_dataset import DialogueItem as CommonDialogueItem
+from apps.common.schemas.narrative_dataset import HighlightItem as CommonHighlightItem
+from apps.common.schemas.narrative_dataset import HighlightType as CommonHighlightType
+from apps.common.schemas.narrative_dataset import (
+    NarrativeChapter,
+    NarrativeDataset,
+    NarrativeScene,
+    ProjectMetadata,
+    SceneContentType,
 )
 
 logger = logging.getLogger(__name__)
@@ -51,9 +59,13 @@ class AnnotationService:
             from apps.atomflow.refinery.models import Material
 
             # [Optimization] 使用 defer 推迟加载不需要的大字段 (如keyframe_map)
-            # 仅加载核心业务字段 (id, dialogues, scenes/slices) 以降低内存峰值
-            # 即使 slices 有 2.6MB，我们只加载它，而不加载可能同样巨大的 v
-            material = Material.objects.filter(media=job.media).defer("keyframe_map", "tech_meta", "error_log").first()
+            # [Update] Slice 是 Refinery 的过程数据，Workbench 无需感知且数据量大，显式 defer
+            # 仅加载核心业务字段 (id, dialogues, scenes) 以降低内存峰值
+            material = (
+                Material.objects.filter(media=job.media)
+                .defer("keyframe_map", "tech_meta", "error_log", "slices")
+                .first()
+            )
         except ImportError:
             logger.warning("Refinery Material model not found. Skipping Refinery injection.")
         except Exception as e:
@@ -115,6 +127,28 @@ class AnnotationService:
         media_anno.character_list = AnnotationService.get_character_roster(job.media)
 
         return media_anno
+
+    @staticmethod
+    def save_annotation(job, payload: dict, user_id: str = None) -> MediaAnnotation:
+        """
+        [数据保存]
+        前端提交 JSON -> Pydantic 校验 -> 覆盖保存
+        Service 层负责版本控制策略和状态流转的编排。
+        """
+        # 1. 校验
+        try:
+            annotation = MediaAnnotation(**payload)
+        except Exception as e:
+            logger.error(f"Validation failed for Job {job.id}: {e}")
+            raise ValueError(f"数据校验失败: {e}")
+
+        # 2. 序列化
+        data_dict = annotation.model_dump(mode="json", exclude_none=True)
+
+        # 3. 持久化 (调用 Job 的 A/B 轮转保存)
+        job.rotate_and_save(data_dict, save_to_db=True)
+
+        return annotation
 
     @staticmethod
     def _build_absolute_url(url: str) -> str:
@@ -226,31 +260,199 @@ class AnnotationService:
         return items
 
     @staticmethod
-    def save_annotation(job, payload: dict) -> MediaAnnotation:
-        """
-        [数据保存]
-        前端提交 JSON -> Pydantic 校验 -> 覆盖保存
-        """
-        # 1. 校验
+    def _format_seconds_to_timestamp(seconds: float) -> str:
+        """辅助：秒 -> HH:MM:SS.mmm"""
+        if seconds is None:
+            seconds = 0.0
+        m, s = divmod(seconds, 60)
+        h, m = divmod(m, 60)
+        return "{:02d}:{:02d}:{:06.3f}".format(int(h), int(m), s)
+
+    @staticmethod
+    def _map_scene_type(wb_type: Any) -> SceneContentType:
+        """[映射] Workbench SceneType -> Narrative SceneContentType"""
+        # 尝试直接值匹配
         try:
-            annotation = MediaAnnotation(**payload)
+            val = wb_type.value if hasattr(wb_type, "value") else str(wb_type)
+            return SceneContentType(val)
+        except ValueError:
+            pass
+
+        # 模糊/特定映射
+        val_lower = str(val).lower()
+        mapping = {
+            "dialogue": SceneContentType.DIALOGUE_HEAVY,
+            "action": SceneContentType.ACTION,
+            "montage": SceneContentType.MONTAGE,
+            "establishing": SceneContentType.ESTABLISHING_SHOT,
+            "emotional": SceneContentType.UNKNOWN,  # Narrative Schema 暂无 Emotional
+        }
+        return mapping.get(val_lower, SceneContentType.UNKNOWN)
+
+    @staticmethod
+    def _map_highlight_type(wb_type: Any) -> CommonHighlightType:
+        """[映射] Workbench HighlightType -> Narrative HighlightType"""
+        try:
+            val = wb_type.value if hasattr(wb_type, "value") else str(wb_type)
+            return CommonHighlightType(val)
+        except ValueError:
+            pass
+
+        val_lower = str(val).lower()
+        mapping = {
+            "humor": CommonHighlightType.COMEDY,  # Humor -> Comedy
+            "dialogue": CommonHighlightType.OTHER,  # Narrative 无 Dialogue 高光
+            "information": CommonHighlightType.OTHER,
+        }
+        return mapping.get(val_lower, CommonHighlightType.OTHER)
+
+    @staticmethod
+    def generate_narrative_dataset(project) -> NarrativeDataset:
+        """
+        [数据组装] 构建 Narrative Dataset (原 Blueprint)
+        将 Workbench 的工程数据 (MediaAnnotation) 转换为 下游消费数据 (NarrativeDataset)。
+        """
+        try:
+            valid_jobs = project._get_valid_jobs()
+
+            scenes_map = {}
+            chapters_map = {}
+
+            # [Fix] 全局场景计数器，用于生成线性递增的 local_id (1, 2, 3...)
+            global_scene_counter = 1
+
+            # 1. 遍历 Job，转换数据
+            for job in valid_jobs:
+                media_anno = AnnotationService.load_annotation(job)
+
+                # 1.1 构建 Chapter (对应一个 Media)
+                # 注意：NarrativeDataset 的 Chapter 结构比较简单，主要作为索引
+                chapter_uuid = uuid.UUID(media_anno.media_id) if media_anno.media_id else uuid.uuid4()
+                chapter_scene_ids = []
+
+                # 1.2 转换 Scenes
+                for s_item in media_anno.scenes:
+                    # 生成 Scene UUID (优先使用 context.id)
+                    try:
+                        s_uuid = uuid.UUID(s_item.context.id)
+                    except:  # noqa: E722
+                        s_uuid = uuid.uuid4()
+
+                    # 映射 SceneContentType
+                    content_type = AnnotationService._map_scene_type(s_item.content.scene_type)
+
+                    # 映射 Dialogues
+                    common_dialogues = []
+                    for d in media_anno.dialogues:
+                        # 简单的包含关系判断：对白时间在场景范围内
+                        if s_item.start <= d.start < s_item.end:
+                            common_dialogues.append(
+                                CommonDialogueItem(
+                                    content=d.content.text,
+                                    speaker=d.content.speaker,
+                                    start_time=AnnotationService._format_seconds_to_timestamp(d.start),
+                                    end_time=AnnotationService._format_seconds_to_timestamp(d.end),
+                                )
+                            )
+
+                    # 映射 Captions & Highlights (逻辑同上)
+                    common_captions = []
+                    for c in media_anno.captions:
+                        if s_item.start <= c.start < s_item.end:
+                            common_captions.append(
+                                CommonCaptionItem(
+                                    content=c.content.content,
+                                    type="Other",  # CaptionType 暂未在 Narrative 中定义复杂 Enum，保持 Other 或扩展
+                                    start_time=AnnotationService._format_seconds_to_timestamp(c.start),
+                                    end_time=AnnotationService._format_seconds_to_timestamp(c.end),
+                                )
+                            )
+
+                    common_highlights = []
+                    for h in media_anno.highlights:
+                        if s_item.start <= h.start < s_item.end:
+                            # 将 mood 放入 tags
+                            tags = []
+                            if h.content.mood:
+                                tags.append(
+                                    h.content.mood.value if hasattr(h.content.mood, "value") else str(h.content.mood)
+                                )
+
+                            common_highlights.append(
+                                CommonHighlightItem(
+                                    description=h.content.description or "",
+                                    type=AnnotationService._map_highlight_type(h.content.type),
+                                    start_time=AnnotationService._format_seconds_to_timestamp(h.start),
+                                    end_time=AnnotationService._format_seconds_to_timestamp(h.end),
+                                    tags=tags,
+                                )
+                            )
+
+                    # 构建 NarrativeScene
+                    # [Fix] 使用全局线性递增 ID，而非基于章节的偏移量
+                    scene_local_id = global_scene_counter
+                    global_scene_counter += 1
+
+                    narrative_scene = NarrativeScene(
+                        scene_uuid=s_uuid,
+                        id=scene_local_id,
+                        start_time=AnnotationService._format_seconds_to_timestamp(s_item.start),
+                        end_time=AnnotationService._format_seconds_to_timestamp(s_item.end),
+                        scene_content_type=content_type,
+                        # [Fix] 补全核心叙事与运镜分析
+                        narrative_summary=s_item.content.narrative_action,
+                        camera_movement=s_item.content.camera_logic or "",
+                        dialogues=common_dialogues,
+                        captions=common_captions,
+                        highlights=common_highlights,
+                        inferred_location=s_item.content.location or "Unknown",
+                        character_dynamics=s_item.content.character_dynamics or "",
+                        mood_and_atmosphere=",".join(s_item.content.visual_mood_tags),
+                    )
+
+                    scenes_map[str(s_uuid)] = narrative_scene
+                    chapter_scene_ids.append(str(s_uuid))
+
+                # 构建 Chapter
+                chapter = NarrativeChapter(
+                    chapter_uuid=chapter_uuid,
+                    local_id=media_anno.sequence_number,
+                    name=media_anno.file_name,
+                    scene_ids=chapter_scene_ids,
+                )
+                chapters_map[str(chapter_uuid)] = chapter
+
+            # 2. 构建 Metadata
+            metadata = ProjectMetadata(
+                asset_name=project.asset.title if project.asset else "Unknown Asset",
+                project_name=project.name,
+                version="1.0",
+                issue_date=datetime.now().isoformat(),
+                annotator="Annotation Workbench",
+                description=project.description or "",
+            )
+
+            # 3. 构建 Dataset
+            dataset = NarrativeDataset(
+                asset_uuid=project.asset.id if project.asset else uuid.uuid4(),
+                project_uuid=project.id,
+                project_metadata=metadata,
+                scenes=scenes_map,
+                chapters=chapters_map,
+            )
+
+            # 4. 持久化 (BLUEPRINT)
+            project.save_artifact(
+                "BLUEPRINT",
+                dataset.model_dump_json(
+                    indent=2,
+                    by_alias=True,
+                    exclude={"scenes": {"__all__": {"start_sec", "end_sec", "duration"}}},
+                ),
+            )
+
+            return dataset
+
         except Exception as e:
-            logger.error(f"Validation Error: {e}")
-            raise ValueError(f"Islinvalid Schema: {e}")
-
-        # 2. 更新时间戳
-        annotation.updated_at = datetime.now()
-
-        # 3. 序列化
-        # [Fix] JSONField 需要 dict 对象，而不是 JSON 字符串; mode='json' 确保 UUID/Date 等被正确转换
-        data_dict = annotation.model_dump(mode="json", exclude_none=True)
-
-        # 使用 Job 的轮转保存方法 (A/B Buffer)
-        job.rotate_and_save(data_dict, save_to_db=True)
-
-        # 更新状态为 PROCESSING (如果之前是 PENDING)
-        if job.status == BaseJob.STATUS.PENDING:
-            job.start_annotation()
-            job.save()
-
-        return annotation
+            logger.error(f"Generate Narrative Dataset failed for Project {project.id}: {e}", exc_info=True)
+            raise e

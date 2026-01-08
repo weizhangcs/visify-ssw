@@ -1,4 +1,4 @@
-# apps/workflow/annotation/services/import_service.py
+# apps/workflow/annotation/services/import_project_service.py
 
 import json
 import logging
@@ -10,6 +10,7 @@ from apps.media_assets.models import Asset
 from ..jobs import AnnotationJob
 from ..projects import AnnotationProject
 from ..services.annotation_service import AnnotationService
+from ..services.audit_service import ArtifactAuditService
 
 logger = logging.getLogger(__name__)
 
@@ -84,7 +85,8 @@ class ProjectImportService:
                 AnnotationService.save_annotation(job, item_data)
 
             # 5. 收尾
-            new_project.run_audit()
+            # [Refactor] 调用 AuditService 而不是 AnnotationService
+            ArtifactAuditService.run_project_audit(new_project)
             return new_project
 
         except Exception as e:

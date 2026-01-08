@@ -1,8 +1,9 @@
+import json
 import logging
 from collections import defaultdict
 from typing import Any, Dict, List
 
-from ..schemas import DataOrigin
+from apps.common.schemas.annotation.workbench import DataOrigin
 
 # 引用 AnnotationService 用于加载 Job 数据
 from .annotation_service import AnnotationService
@@ -20,6 +21,45 @@ class ArtifactAuditService:
     2. 复用“共现矩阵 (Co-occurrence)”计算逻辑。
     3. 复用“多维归一化 + 权重 (Presence 0.7 / Interaction 0.3)” 评分算法。
     """
+
+    @classmethod
+    def run_project_audit(cls, project) -> dict:
+        """
+        [业务编排] 执行项目审计
+        流程：生成数据集 -> 审计 -> 更新状态 -> 保存报告
+        """
+        try:
+            # 1. 强制刷新 Narrative Dataset (Blueprint)
+            # 确保发给 Cloud/Inference 的是最新数据
+            AnnotationService.generate_narrative_dataset(project)
+
+            # 2. 执行审计
+            # AuditService 会重新读取 Jobs，这和 generate_narrative_dataset 读的是同一份数据源
+            report_data = cls.audit_project(project)
+
+            # 3. 持久化审计报告 (AUDIT)
+            json_output = json.dumps(report_data, indent=2, ensure_ascii=False)
+            project.save_artifact("AUDIT", json_output)
+
+            # 4. 更新项目状态为 COMPLETED
+            if project.status != "COMPLETED":
+                project.status = "COMPLETED"
+                project.save(update_fields=["status"])
+
+                # [状态联动] 自动完成所有 Job
+                for job in project.jobs.all():
+                    if job.status != "COMPLETED":
+                        try:
+                            job.complete_annotation()
+                            job.save()
+                        except Exception as e:
+                            logger.warning(f"Auto-complete job {job.id} failed: {e}")
+
+            return report_data
+
+        except Exception as e:
+            logger.error(f"Run Project Audit failed for Project {project.id}: {e}", exc_info=True)
+            raise e
 
     @classmethod
     def audit_project(cls, project) -> Dict[str, Any]:

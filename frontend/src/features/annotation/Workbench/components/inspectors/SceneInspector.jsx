@@ -10,7 +10,8 @@ import {
     EditOutlined,
     ClockCircleOutlined,
     CheckOutlined,
-    DeleteOutlined
+    DeleteOutlined,
+    TeamOutlined
 } from '@ant-design/icons';
 import VOCAB from '../../config/vocabularies.json';
 import './inspector.css';
@@ -34,7 +35,8 @@ const SceneInspector = ({
         location,
         camera_logic,
         reason,
-        description
+        description,
+        character_dynamics
     } = data;
 
     const { start = 0, end = 0 } = track;
@@ -102,6 +104,17 @@ const SceneInspector = ({
                         placeholder="描述核心剧情动作..."
                         autoSize={{ minRows: 3, maxRows: 6 }}
                         className="form-textarea"
+                    />
+                </div>
+
+                {/* Row 3.5: 角色张力 */}
+                <div className="form-group">
+                    <label className="form-label"><TeamOutlined /> 角色张力</label>
+                    <TextArea
+                        value={character_dynamics || ''}
+                        onChange={(e) => onChange('character_dynamics', e.target.value)}
+                        placeholder="描述角色间的互动关系与张力..."
+                        autoSize={{ minRows: 2, maxRows: 4 }}
                     />
                 </div>
 

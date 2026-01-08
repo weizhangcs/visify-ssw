@@ -1,6 +1,5 @@
 # 文件路径: apps/workflow/annotation/projects.py
 
-import json
 import logging
 
 from django.core.files.base import ContentFile
@@ -99,15 +98,23 @@ class AnnotationProject(BaseProject):
             self.jobs.select_related("media").order_by("media__sequence_number")
         )
 
-    def _rotate_and_save(self, content_str: str, file_prefix: str, current_field_name: str, backup_field_name: str):
+    def save_artifact(self, artifact_type: str, content_str: str):
         """
-        [基础设施: A/B 轮转保存]
-        1. 检查 Current 是否存在。
-        2. 如果存在，将其内容搬运到 Backup。
-        3. 将新内容写入 Current。
+        [基础设施] 保存产出物 (支持 A/B 轮转)
+        Service 层计算好内容后，调用此方法进行持久化存储。
+        """
+        # 配置映射: Type -> (FilePrefix, CurrentField, BackupField)
+        config = {
+            "EXPORT": ("project_export", "project_export_file", "project_export_file_backup"),
+            "BLUEPRINT": ("blueprint", "final_blueprint_file", "final_blueprint_file_backup"),
+            "AUDIT": ("audit_report", "annotation_audit_report", "annotation_audit_report_backup"),
+        }
 
-        TODO: 基于此结构开发 rollback() 方法，允许将 backup_field 的内容覆盖回 current_field。
-        """
+        if artifact_type not in config:
+            raise ValueError(f"Unknown artifact type: {artifact_type}")
+
+        file_prefix, current_field_name, backup_field_name = config[artifact_type]
+
         current_field = getattr(self, current_field_name)
         backup_field = getattr(self, backup_field_name)
 
@@ -121,12 +128,6 @@ class AnnotationProject(BaseProject):
 
                 if existing_content:
                     backup_filename = f"{file_prefix}_{self.id}_backup.json"
-                    # save=False: 我们不希望在这里触发数据库 UPDATE，只写文件
-                    # 注意：FileField.save 默认行为取决于 Storage Backend，
-                    # 通常 save=False 只会更新内存里的 Model 实例，不会立即 commit 到 DB，
-                    # 只有最后的 save() 才会把两个字段的路径更新一起提交。
-
-                    # [Fix] 直接使用 backup_field 变量，修复 unused variable 警告
                     backup_field.save(backup_filename, ContentFile(existing_content), save=False)
             except Exception as e:
                 # 备份失败不应阻断主流程（比如文件被手动删除了），记录警告即可
@@ -135,157 +136,11 @@ class AnnotationProject(BaseProject):
         # --- 步骤 2: 写入新文件 (New -> Current) ---
         new_filename = f"{file_prefix}_{self.id}.json"
 
-        # 这里虽然也可以用 current_field 变量，但为了确保 save 行为作用于 self 实例的最新状态，
-        # 保持 getattr 也是可以的，不过为了风格统一，既然上面获取了对象，这里也可以直接用：
-        # current_field.save(...)
-        # 但考虑到 FileField 的 save 方法有时会有副作用，最稳妥的方式还是通过 getattr 确保拿到的是绑定的 FieldFile
         getattr(self, current_field_name).save(
             new_filename,
             ContentFile(content_str.encode("utf-8")),
             save=True,  # 这里触发最终的 DB 落盘，将 Current 和 Backup 的路径变更一并保存
         )
-
-    def export_project_annotation(self):
-        """
-        [聚合逻辑] 读取所有 Job 的 JSON -> 完整保留 Context -> 合并
-        """
-        from .schemas import ProjectAnnotation
-        from .services.annotation_service import AnnotationService
-
-        project_anno = ProjectAnnotation(
-            project_id=str(self.id), project_name=self.name, character_list=[], annotations={}
-        )
-
-        valid_jobs = self._get_valid_jobs()
-        for job in valid_jobs:
-            try:
-                # 获取全量数据
-                media_anno = AnnotationService.load_annotation(job)
-
-                # [Optimization] 导出时移除 waveform_data，减小文件体积
-                # 导入时会自动从目标环境的 Material 重新注入，无需在工程文件中携带
-                media_anno.waveform_data = None
-                project_anno.annotations[media_anno.media_id] = media_anno
-            except Exception as e:
-                logger.error(f"Project Export Error on Job {job.id}: {e}")
-
-        json_output = project_anno.model_dump_json(indent=2)
-
-        # [修改] 使用 A/B 轮转
-        self._rotate_and_save(
-            content_str=json_output,
-            file_prefix="project_export",
-            current_field_name="project_export_file",
-            backup_field_name="project_export_file_backup",
-        )
-
-        return project_anno
-
-    def generate_blueprint(self):
-        """
-        [聚合逻辑] 读取所有 Job 的 JSON -> 清洗 -> 合并
-        """
-        from .schemas import Blueprint, Chapter
-        from .services.annotation_service import AnnotationService
-
-        blueprint = Blueprint(
-            project_id=str(self.id),
-            asset_id=str(self.asset.id) if self.asset else "",
-            project_name=self.name,
-            global_character_list=[],
-            chapters={},
-        )
-
-        all_characters = set()
-        valid_jobs = self._get_valid_jobs()
-
-        for job in valid_jobs:
-            try:
-                media_anno = AnnotationService.load_annotation(job)
-                # 清洗数据
-                clean_data = media_anno.get_clean_business_data()
-
-                # 转换为 Chapter
-                chapter = Chapter(
-                    id=str(media_anno.media_id),
-                    name=media_anno.file_name,
-                    source_file=media_anno.source_path,
-                    duration=media_anno.duration,
-                    sequence_number=media_anno.sequence_number,
-                    **clean_data,
-                )
-
-                blueprint.chapters[chapter.id] = chapter
-
-                # 收集角色
-                for d in clean_data.get("dialogues", []):
-                    spk = d.get("speaker")
-                    if spk and spk != "Unknown":
-                        all_characters.add(spk)
-
-            except Exception as e:
-                logger.error(f"Blueprint Aggregation Error on Job {job.id}: {e}")
-                continue
-
-        blueprint.global_character_list = sorted(list(all_characters))
-
-        json_output = blueprint.model_dump_json(indent=2, exclude_none=True)
-
-        # [修改] 使用 A/B 轮转
-        self._rotate_and_save(
-            content_str=json_output,
-            file_prefix="blueprint",
-            current_field_name="final_blueprint_file",
-            backup_field_name="final_blueprint_file_backup",
-        )
-
-        return blueprint
-
-    def run_audit(self):
-        """
-        [能力 3: 生成审计报告 + 强制同步生成蓝图]
-        这是一个复合原子操作：
-        1. 重新生成 Blueprint (确保发给 Cloud 的是最新数据)
-        2. 执行 Audit (确保 UI 看到的是最新数据)
-        3. [新增] 标记项目为已完成 (COMPLETED)
-        """
-
-        from .services.audit_service import ArtifactAuditService
-
-        # 1. [关键] 强制刷新蓝图
-        # 即使 blueprint 没变，重新生成一次的成本远低于数据不一致的风险
-        self.generate_blueprint()
-
-        # 2. 执行审计 (Service 会重新读取 Jobs，这和 generate_blueprint 读的是同一份数据源)
-        report_data = ArtifactAuditService.audit_project(self)
-
-        json_output = json.dumps(report_data, indent=2, ensure_ascii=False)
-
-        # 3. [新增] 更新项目状态为 COMPLETED
-        # 只要触发了审计，就意味着用户认为当前阶段工作已完成，准备交付
-        if self.status != "COMPLETED":
-            self.status = "COMPLETED"
-            # 注意：后续的 _rotate_and_save 会触发 instance.save()，从而持久化 status 变更
-
-            # [状态联动] 项目完成 -> 所有任务完成
-            # 遍历所有非 COMPLETED 的任务，强制执行完成转换
-            for job in self.jobs.all():
-                if job.status != "COMPLETED":
-                    try:
-                        job.complete_annotation()
-                        job.save()
-                    except Exception as e:
-                        logger.warning(f"Auto-complete job {job.id} failed during project audit: {e}")
-
-        # [修改] 使用 A/B 轮转
-        self._rotate_and_save(
-            content_str=json_output,
-            file_prefix="audit_report",
-            current_field_name="annotation_audit_report",
-            backup_field_name="annotation_audit_report_backup",
-        )
-
-        return report_data
 
     def save(self, *args, **kwargs):
         super().save(*args, **kwargs)
