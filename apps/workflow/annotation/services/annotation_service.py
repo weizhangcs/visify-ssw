@@ -237,7 +237,11 @@ class AnnotationService:
             business_source = s_data.get("content") if isinstance(s_data.get("content"), dict) else s_data
 
             # 简单的类型映射，如果字符串不匹配，Schema 会 fallback 到 UNKNOWN
-            raw_type = business_source.get("scene_type", "unknown")
+            raw_type_data = business_source.get("scene_type")
+            if isinstance(raw_type_data, dict):
+                raw_type = raw_type_data.get("value", "unknown")
+            else:
+                raw_type = str(raw_type_data) if raw_type_data else "unknown"
 
             items.append(
                 SceneItem(

@@ -36,7 +36,7 @@ class CharacterRefineContextMixin:
 
         Args:
             target: The Material instance.
-            result: A dictionary containing a list of 'updates'.
+            result: A dictionary containing a list of 'updates' (mapped from identified_subtitles).
         """
         updates = result.get("updates", [])
         original_track = target.dialogue

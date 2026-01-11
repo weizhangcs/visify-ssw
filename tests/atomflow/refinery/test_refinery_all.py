@@ -41,7 +41,7 @@ def run_flow_test():
 
     rule, _ = RefineryAtomRule.objects.update_or_create(
         slug="refinery_full_flow_v1",
-        defaults={"name": "Refinery 全量编排规则 V1", "rules_config": rules_json, "mode": "PROD"},
+        defaults={"name": "Refinery 全量编排规则 V2", "rules_config": rules_json, "mode": "PROD"},
     )
     print(f"[*] 规则已就绪: {rule.slug} (步骤数: {rule.step_count})")
 

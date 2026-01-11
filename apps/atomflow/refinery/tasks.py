@@ -169,7 +169,6 @@ def _dispatch_service(op_slug: str, payload: dict, target_id: str) -> dict:
         content = payload["content"]
         # 假设 payload 中可能包含 lang，如果没有则默认为 zh
         lang = payload.get("lang", "zh")
-        model_name = payload.get("model_name", "models/gemini-2.5-flash")
 
         temp_file = Path(f"/tmp/subtitle_merge_input_{target_id}.json")
         try:
@@ -179,7 +178,6 @@ def _dispatch_service(op_slug: str, payload: dict, target_id: str) -> dict:
                 temp_file_path=temp_file,
                 enable_semantic_merge=True,
                 lang=lang,
-                model_name=model_name,
             )
         finally:
             if temp_file.exists():
@@ -196,27 +194,17 @@ def _dispatch_service(op_slug: str, payload: dict, target_id: str) -> dict:
         # 需要实例化 CloudClient
         client = CloudApiService()
 
-        # 临时文件创建仍保留在 Task，因为这是 Service 接口要求的物理文件交互
-        import json
-
-        temp_json_path = Path(f"/tmp/dialogue_{target_id}.json")
-        with open(temp_json_path, "w", encoding="utf-8") as f:
-            json.dump(payload["dialogue"], f)
-
         asset_meta = {
             "video_title": payload["video_title"],
             "known_characters": payload["known_characters"],
             "lang": payload["lang"],
         }
 
-        result_data = CharacterRefinerService.run(client, str(temp_json_path), asset_meta)
-
-        # 获取增量更新数据 (通常只包含 index, speaker, reasoning)
-        updates = result_data if isinstance(result_data, list) else result_data.get("dialogue_track", [])
-
-        # 清理临时文件
-        if temp_json_path.exists():
-            temp_json_path.unlink()
+        # [Update] 直接传递数据，Service 负责 Schema 转换和上传
+        result_data = CharacterRefinerService.run(client, payload["dialogue"], asset_meta)
+        # 获取增量更新数据
+        # Cloud 返回结构: {"identified_subtitles": [...], "stats": ...}
+        updates = result_data.get("identified_subtitles", [])
 
         # 合并逻辑已移至 Context
         return {"updates": updates}
@@ -239,29 +227,13 @@ def _dispatch_service(op_slug: str, payload: dict, target_id: str) -> dict:
         client = CloudApiService()
         frames = payload["frames"]
         lang = payload["lang"]
-        visual_model = payload.get("visual_model", "models/gemini-2.5-flash")
-
-        temp_file = Path(f"/tmp/visual_frames_{target_id}.json")
-        try:
-            result = VisualAnalyzerService.run(client, frames, lang, visual_model, temp_file)
-        finally:
-            if temp_file.exists():
-                temp_file.unlink()
-        return result
+        return VisualAnalyzerService.run(client, frames, lang)
 
     elif op_slug == "slice_regrouper":
         client = CloudApiService()
         slices = payload["slices"]
         lang = payload["lang"]
-        model_name = payload.get("model_name", "models/gemini-2.5-flash")
-
-        temp_file = Path(f"/tmp/slices_regrouper_input_{target_id}.json")
-        try:
-            result = SliceRegrouperService.run(client, slices, lang, model_name, temp_file)
-        finally:
-            if temp_file.exists():
-                temp_file.unlink()
-        return result
+        return SliceRegrouperService.run(client, slices, lang)
 
     else:
         raise ValueError(f"Unknown operator slug: {op_slug}")

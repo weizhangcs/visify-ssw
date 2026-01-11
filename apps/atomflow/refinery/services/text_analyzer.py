@@ -7,7 +7,10 @@ from pathlib import Path
 from typing import Dict, List, Optional
 
 from apps.common.cloud_client import CloudApiService
+from apps.common.schemas.refinery.subtitle_merger import SubtitleItem as ExecSubtitleItem
+from apps.common.schemas.refinery.subtitle_merger import SubtitleMergerPayload
 
+# 持久化 Schema (用于 Material.dialogue 存储)
 from ..schemas import SubtitleItem
 
 logger = logging.getLogger(__name__)
@@ -32,7 +35,6 @@ class TextAnalyzerService:
         temp_file_path: Optional[Path] = None,
         enable_semantic_merge: bool = True,
         lang: str = "zh",
-        model_name: str = "models/gemini-2.5-flash",
     ) -> List[Dict]:
         """
         执行文本解析任务。
@@ -43,7 +45,6 @@ class TextAnalyzerService:
             temp_file_path: 临时文件路径 (用于语义合并上传)。
             enable_semantic_merge: 是否启用语义合并。
             lang: 语言代码。
-            model_name: 使用的 LLM 模型名称。
 
         Returns:
             标准化对白列表 (List[SubtitleItem.model_dump()])。
@@ -116,7 +117,7 @@ class TextAnalyzerService:
         if enable_semantic_merge and cloud_client and temp_file_path and standardized_list:
             logger.info("TextAnalyzer: 启动语义合并流程...")
             merged_list = TextAnalyzerService._semantic_merge_subtitles(
-                cloud_client, standardized_list, temp_file_path, lang, model_name
+                cloud_client, standardized_list, temp_file_path, lang
             )
             if merged_list:
                 logger.info(f"TextAnalyzer: 语义合并完成，条目数从 {len(standardized_list)} 优化为 {len(merged_list)}")
@@ -180,15 +181,25 @@ class TextAnalyzerService:
 
     @staticmethod
     def _semantic_merge_subtitles(
-        client: CloudApiService, subtitles: List[Dict], temp_file_path: Path, lang: str, model_name: str
+        client: CloudApiService, subtitles: List[Dict], temp_file_path: Path, lang: str
     ) -> List[Dict]:
         """
-        [内部方法] 调用 Cloud SUBTITLE_MERGER 接口进行语义合并。
+        [内部方法] 调用 Cloud REFINERY_SUBTITLE_MERGER 接口进行语义合并。
         """
-        # 1. 写入临时文件
+        # 1. 转换并写入临时文件 (使用 Execution Schema)
         try:
+            # 将持久化格式转换为执行格式 (虽然结构相似，但为了严谨进行转换)
+            exec_items = [
+                ExecSubtitleItem(
+                    index=s["index"],
+                    start_time=s["start_time"],
+                    end_time=s["end_time"],
+                    content=s["content"],
+                )
+                for s in subtitles
+            ]
             with open(temp_file_path, "w", encoding="utf-8") as f:
-                json.dump(subtitles, f, ensure_ascii=False)
+                json.dump([item.model_dump() for item in exec_items], f, ensure_ascii=False)
         except Exception as e:
             logger.error(f"TextAnalyzer: Failed to write temp file for merge: {e}")
             return []
@@ -199,15 +210,18 @@ class TextAnalyzerService:
             logger.error(f"TextAnalyzer: Failed to upload subtitles file - {upload_rel_path}")
             return []
 
-        # 3. 构造 Payload
-        payload = {
-            "lang": lang,
-            "model": model_name,
-            "subtitle_file_path": upload_rel_path,
-        }
+        # 3. 构造 Payload (使用 Pydantic 校验)
+        try:
+            payload = SubtitleMergerPayload(lang=lang, mode="DEBUG", subtitle_file_path=upload_rel_path)
+        except ValueError as e:
+            logger.error(f"TextAnalyzer: Invalid payload: {e}")
+            return []
 
         # 4. 创建任务
-        api_success, task_response = client.create_task("SUBTITLE_MERGER", payload)
+        # exclude_none=True 确保不发送多余的 null 字段
+        api_success, task_response = client.create_task(
+            "REFINERY_SUBTITLE_MERGER", payload.model_dump(exclude_none=True)
+        )
         if not api_success:
             logger.error(f"TextAnalyzer: Merge task creation failed - {task_response}")
             return []
@@ -222,11 +236,21 @@ class TextAnalyzerService:
             return []
 
         # 6. 下载结果
-        download_url = final_data.get("download_url") or final_data.get("result", {}).get("download_url")
+        # VSS Cloud 返回标准: 顶层 download_url 用于下载结果文件
+        # output_file_path 是云端相对路径，仅用于云端任务链式引用，不用于直接下载
+        download_url = final_data.get("download_url")
+
         if download_url:
             dl_success, content_bytes = client.download_task_result(download_url)
             if dl_success:
-                result_json = json.loads(content_bytes.decode("utf-8"))
-                return result_json.get("merged_subtitles", [])
+                try:
+                    result_json = json.loads(content_bytes.decode("utf-8"))
+                    return result_json.get("merged_subtitles", [])
+                except Exception as e:
+                    logger.error(f"TextAnalyzer: Failed to parse result JSON: {e}")
+                    return []
+            else:
+                logger.error(f"TextAnalyzer: Failed to download result from {download_url}")
+                return []
 
         return final_data.get("result", {}).get("merged_subtitles", [])

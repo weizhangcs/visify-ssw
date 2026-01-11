@@ -1,6 +1,6 @@
 import logging
 
-from ...schemas import Scene
+from ...schemas import Scene, SceneContent
 
 logger = logging.getLogger(__name__)
 
@@ -30,7 +30,6 @@ class SliceRegrouperContextMixin:
         return {
             "slices": target.slices,  # 传递富切片列表
             "lang": lang,
-            "model_name": "models/gemini-2.5-flash",  # 默认使用长上下文模型
         }
 
     def _handle_slice_regrouper(self, target, result):
@@ -43,10 +42,26 @@ class SliceRegrouperContextMixin:
             target: The Material instance.
             result: A dictionary containing the 'scenes' list.
         """
-        scenes = result.get("scenes", [])
-        # 确保回填的是 Scene 对象的 model_dump() 列表
-        target.scenes = [Scene(**s).model_dump() for s in scenes]
-        logger.info(f"SliceRegrouper: Successfully saved {len(scenes)} scenes to Material {target.id}.")
+        scenes_data = result.get("scenes", [])
+        if not scenes_data:
+            return
+
+            # [Adapter] Cloud returns scene_type as {"value": "...", "label": "..."}
+            # Local Schema SceneContent.scene_type is now LabelItem, so it matches.
+            # But we need to ensure Pydantic validation passes.
+
+        validated_scenes = []
+        for s in scenes_data:
+            try:
+                # Ensure content is validated against SceneContent
+                content_obj = SceneContent(**s["content"])
+                s["content"] = content_obj.model_dump()
+                scene_obj = Scene(**s)
+                validated_scenes.append(scene_obj.model_dump())
+            except Exception as e:
+                logger.warning(f"Failed to validate scene {s.get('scene_id')}: {e}")
+
+        target.scenes = validated_scenes
 
     def _check_slice_regrouper_ready(self, target):
         """

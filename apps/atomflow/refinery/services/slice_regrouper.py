@@ -1,10 +1,13 @@
 # apps/atomflow/refinery/services/slice_regrouper.py
 import json
 import logging
+import tempfile
 from pathlib import Path
 from typing import Any, Dict, List
 
 from apps.common.cloud_client import CloudApiService
+from apps.common.schemas.refinery.slice_regrouper import MultimodalSlice as ExecMultimodalSlice
+from apps.common.schemas.refinery.slice_regrouper import SliceRegrouperPayload
 
 logger = logging.getLogger(__name__)
 
@@ -14,9 +17,9 @@ class SliceRegrouperService:
     [Refinery Operator] 场景聚类与归纳算子 (Cloud LLM)。
 
     职责：
-    1. 接收富切片列表。
-    2. 构造 Cloud API 请求 Payload (生产模式)。
-    3. 调用 Cloud SLICE_REGROUPER 接口。
+    1. 接收富切片列表 (Rich Slices) 并转换为 Execution Schema。
+    2. 构造 Cloud API 请求 Payload。
+    3. 调用 Cloud REFINERY_SLICE_REGROUPER 接口。
     4. 等待任务完成并下载分析结果。
     """
 
@@ -25,8 +28,6 @@ class SliceRegrouperService:
         client: CloudApiService,
         slices: List[Dict[str, Any]],
         lang: str,
-        model_name: str,
-        temp_file_path: Path,
     ) -> Dict[str, Any]:
         """
         执行场景聚类与归纳任务。
@@ -35,8 +36,6 @@ class SliceRegrouperService:
             client: CloudApiService 实例。
             slices: 富切片列表，格式 List[MultimodalSlice.model_dump()]。
             lang: 目标语言代码 ("zh" or "en")。
-            model_name: 使用的 LLM 模型名称。
-            temp_file_path: 用于存储 slices 数据的临时文件路径。
 
         Returns:
             分析结果字典 (包含 scenes 列表)。
@@ -47,27 +46,38 @@ class SliceRegrouperService:
         if not slices:
             return {"scenes": []}
 
-        # 1. 将 slices 数据写入临时文件
+        # 1. 数据转换 (Dict -> Execution Schema)
+        # 使用 Pydantic 进行转换和校验，确保符合 Cloud 契约
+        exec_slices = []
         try:
-            with open(temp_file_path, "w", encoding="utf-8") as f:
-                json.dump(slices, f, ensure_ascii=False)
+            for s in slices:
+                exec_slices.append(ExecMultimodalSlice(**s))
         except Exception as e:
-            raise RuntimeError(f"SliceRegrouper: Failed to write temp file: {e}")
+            raise ValueError(f"SliceRegrouper: Data validation failed - {e}")
 
-        # 2. 上传文件
-        success, upload_rel_path = client.upload_file(temp_file_path)
-        if not success:
-            raise RuntimeError(f"SliceRegrouper: Failed to upload slices file - {upload_rel_path}")
+        # 2. 写入临时文件并上传
+        with tempfile.NamedTemporaryFile(mode="w+", delete=False, suffix=".json", encoding="utf-8") as tmp:
+            # exclude_none=True 确保不发送空字段
+            json.dump([s.model_dump(exclude_none=True) for s in exec_slices], tmp, ensure_ascii=False)
+            temp_path = Path(tmp.name)
+
+        try:
+            success, upload_path = client.upload_file(temp_path)
+            if not success:
+                raise RuntimeError(f"SliceRegrouper: Failed to upload slices file - {upload_path}")
+        finally:
+            temp_path.unlink(missing_ok=True)
 
         # 3. 构造任务 Payload
-        payload = {
-            "lang": lang,
-            "model": model_name,
-            "slices_file_path": upload_rel_path,
-        }
+        try:
+            payload = SliceRegrouperPayload(lang=lang, mode="PROD", slices_file_path=upload_path)
+        except ValueError as e:
+            raise ValueError(f"SliceRegrouper: Payload validation failed - {e}")
 
         # 4. 创建任务
-        api_success, task_response = client.create_task("SLICE_REGROUPER", payload)
+        api_success, task_response = client.create_task(
+            "REFINERY_SLICE_REGROUPER", payload.model_dump(exclude_none=True)
+        )
         if not api_success:
             raise RuntimeError(f"SliceRegrouper: Task creation failed - {task_response}")
 
@@ -80,14 +90,17 @@ class SliceRegrouperService:
             raise RuntimeError(f"SliceRegrouper: Task failed or timed out - {final_data}")
 
         # 6. 获取结果
+        # VSS Cloud 返回标准: 顶层 download_url 用于下载结果文件
         download_url = final_data.get("download_url")
+
         if download_url:
             dl_success, content_bytes = client.download_task_result(download_url)
             if not dl_success:
-                raise RuntimeError("SliceRegrouper: Failed to download result file")
-            data = json.loads(content_bytes.decode("utf-8"))
-            logger.info(f"SliceRegrouper: Downloaded result keys: {list(data.keys())}")
-            return data
+                raise RuntimeError(f"SliceRegrouper: Failed to download result file from {download_url}")
+            try:
+                data = json.loads(content_bytes.decode("utf-8"))
+                return data
+            except Exception as e:
+                raise RuntimeError(f"SliceRegrouper: Failed to parse result JSON: {e}")
 
-        # Fallback: 结果直接在 payload 中
-        return final_data.get("result", {})
+        raise RuntimeError("SliceRegrouper: Task completed but no download_url provided.")

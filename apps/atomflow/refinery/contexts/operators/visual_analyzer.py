@@ -63,7 +63,6 @@ class VisualAnalyzerContextMixin:
         return {
             "frames": list(unique_frames.values()),
             "lang": lang,
-            "visual_model": "models/gemini-2.5-flash",  # Configurable
         }
 
     def _handle_visual_analyzer(self, target, result):
@@ -95,8 +94,10 @@ class VisualAnalyzerContextMixin:
                     # If this frame's digest was analyzed, apply the result
                     if digest and digest in analysis_map:
                         try:
+                            raw_data = analysis_map[digest].copy()
+
                             # Use Pydantic to validate and structure the data
-                            va_data = VisualAnalysisData(**analysis_map[digest])
+                            va_data = VisualAnalysisData(**raw_data)
                             frame_data["visual_analysis"] = va_data.model_dump()
                         except Exception as e:
                             logger.warning(f"Failed to parse visual_analysis for digest {digest}: {e}")

@@ -54,13 +54,23 @@ class FrameData(BaseModel):
     path: str = Field(..., description="相对路径")
 
 
+class LabelItem(BaseModel):
+    """
+    [通用结构] 标签项 (Value + Label)。
+    用于存储枚举值的机器码和人类可读标签。
+    """
+
+    value: str
+    label: str
+
+
 class VisualAnalysisData(BaseModel):
     """
     [Cloud API 响应] 视觉分析结果。
     对应 VSS Cloud Visual Analyzer 的输出结构。
     """
 
-    shot_type: Optional[str] = Field(None, description="Main shot size (Label or Enum Key)")
+    shot_type: Optional[LabelItem] = Field(None, description="Main shot size (Value + Label)")
     environment: Optional[str] = Field(None, description="Physical environment (e.g., Indoor-Bedroom, Outdoor-Street)")
     subject: Optional[str] = None
     action: Optional[str] = None
@@ -168,7 +178,7 @@ class SceneContent(BaseModel):
 
     narrative_action: str = Field(..., description="叙事动作/核心事件")
     location: Optional[str] = Field(None, description="主要地点")
-    scene_type: Optional[SceneType] = Field(default=SceneType.UNKNOWN, description="功能类型")
+    scene_type: Optional[LabelItem] = Field(None, description="功能类型 (Value + Label)")
     visual_mood_tags: List[str] = Field(default_factory=list, description="视觉氛围标签")
     camera_logic: Optional[str] = Field(None, description="运镜/剪辑逻辑 (e.g., Static, Fast cuts)")
     character_dynamics: Optional[str] = Field(None, description="角色张力/关系")
