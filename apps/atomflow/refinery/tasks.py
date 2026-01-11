@@ -9,6 +9,8 @@ from apps.atomflow.refinery.services.frame_extractor import FrameExtractorServic
 from apps.atomflow.refinery.services.frame_probe import FrameProbeService
 from apps.atomflow.refinery.services.hls_generator import HLSService
 from apps.atomflow.refinery.services.probe import ProbeService
+from apps.atomflow.refinery.services.scene_verification import SceneVerificationService
+from apps.atomflow.refinery.services.slice_analyzer import SliceAnalyzerService
 from apps.atomflow.refinery.services.slice_regrouper import SliceRegrouperService
 from apps.atomflow.refinery.services.slicer import SlicingService
 from apps.atomflow.refinery.services.text_analyzer import TextAnalyzerService
@@ -229,11 +231,22 @@ def _dispatch_service(op_slug: str, payload: dict, target_id: str) -> dict:
         lang = payload["lang"]
         return VisualAnalyzerService.run(client, frames, lang)
 
+    elif op_slug == "slice_analyzer":
+        client = CloudApiService()
+        # SliceAnalyzer 负责 Hydration，所以需要 keyframe_map
+        return SliceAnalyzerService.run(client, payload["slices"], payload["keyframe_map"], payload["lang"])
+
     elif op_slug == "slice_regrouper":
         client = CloudApiService()
         slices = payload["slices"]
         lang = payload["lang"]
         return SliceRegrouperService.run(client, slices, lang)
+
+    elif op_slug == "scene_verification":
+        video_path = Path(payload["video_path"])
+        scenes = payload["scenes"]
+        output_dir = Path(payload["output_dir"])
+        return SceneVerificationService.run(video_path, scenes, output_dir)
 
     else:
         raise ValueError(f"Unknown operator slug: {op_slug}")

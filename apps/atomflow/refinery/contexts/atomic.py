@@ -13,6 +13,8 @@ from .operators.frame_extract import FrameExtractContextMixin
 from .operators.frame_probe import FrameProbeContextMixin
 from .operators.hls import HLSContextMixin
 from .operators.probe import ProbeContextMixin
+from .operators.scene_verification import SceneVerificationContextMixin
+from .operators.slice_analyzer import SliceAnalyzerContextMixin
 from .operators.slice_regrouper import SliceRegrouperContextMixin
 from .operators.slicing import SlicingContextMixin
 from .operators.sync import SyncContextMixin
@@ -38,7 +40,9 @@ class RefineryAtomicContext(
     CharacterRefineContextMixin,
     SyncContextMixin,
     VisualAnalyzerContextMixin,
+    SliceAnalyzerContextMixin,
     SliceRegrouperContextMixin,
+    SceneVerificationContextMixin,
 ):
     """
     旁路业务上下文：负责 Material 与 算子之间的数据平配。

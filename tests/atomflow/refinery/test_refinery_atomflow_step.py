@@ -25,15 +25,8 @@ def run_flow_test():
     # 算子化框架必须依赖配置，我们先在数据库创建一个临时的测试规则
     # 全量编排：Transcode -> Probe -> HLS -> Text -> Char -> Slicing -> Frame -> Sync
     rules_json = [
-        {"seq": 4, "unit_slug": "text_analyze", "name": "文本分析", "obligation": "REQUIRED"},
-        {"seq": 5, "unit_slug": "audio_analyze", "name": "声纹分析", "obligation": "REQUIRED", "dependence": [4]},
-        {"seq": 6, "unit_slug": "character_refine", "name": "角色精修", "obligation": "REQUIRED", "dependence": [5]},
-        {"seq": 7, "unit_slug": "slicing", "name": "视觉切片", "obligation": "REQUIRED", "dependence": [6]},
-        {"seq": 8, "unit_slug": "frame_extract", "name": "关键帧提取", "obligation": "REQUIRED", "dependence": [7]},
-        {"seq": 9, "unit_slug": "frame_probe", "name": "关键帧检测", "obligation": "REQUIRED", "dependence": [8]},
-        {"seq": 10, "unit_slug": "sync", "name": "云端同步", "obligation": "REQUIRED", "dependence": [9]},
-        {"seq": 11, "unit_slug": "visual_analyzer", "name": "视觉识别", "obligation": "REQUIRED", "dependence": [10]},
-        {"seq": 12, "unit_slug": "slice_regrouper", "name": "场景聚类", "obligation": "REQUIRED", "dependence": [11]},
+        {"seq": 12, "unit_slug": "slice_regrouper", "name": "场景聚类", "obligation": "REQUIRED"},
+        {"seq": 13, "unit_slug": "scene_verification", "name": "场景验证", "obligation": "REQUIRED", "dependence": [12]},
     ]
 
     rule, _ = RefineryAtomRule.objects.update_or_create(

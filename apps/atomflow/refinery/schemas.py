@@ -127,6 +127,17 @@ class AudioContent(BaseModel):
     pass
 
 
+class SliceAnalysis(BaseModel):
+    """
+    [中间产物] 切片级语义分析结果。
+    由 SliceAnalyzer 产出，用于辅助 SliceRegrouper 进行聚类。
+    """
+
+    narrative_summary: Optional[str] = Field(None, description="切片叙事摘要")
+    visual_summary: Optional[str] = Field(None, description="切片视觉摘要")
+    tags: List[str] = Field(default_factory=list, description="切片语义标签")
+
+
 class MultimodalSlice(BaseModel):
     """
     [核心容器] 多模态切片。
@@ -142,6 +153,7 @@ class MultimodalSlice(BaseModel):
     text_contents: List[SubtitleItem] = Field(default_factory=list, description="无损对白数据")
     visual_contents: List[FrameDataInput] = Field(default_factory=list, description="无损视觉分析数据")
     audio_contents: AudioContent = Field(default_factory=AudioContent)
+    slice_analysis: Optional[SliceAnalysis] = Field(default=None, description="切片语义分析结果")
 
 
 class VideoStreamMeta(BaseModel):

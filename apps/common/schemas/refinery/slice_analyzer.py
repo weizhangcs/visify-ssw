@@ -2,10 +2,9 @@ from typing import Any, List, Literal, Optional
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-from apps.common.schemas.refinery.slice_analyzer import SliceAnalysis
-
+# 复用 SliceRegrouper 中定义的 MultimodalSlice 结构作为输入
 # ==============================================================================
-# 1. 输入侧 Schemas (MultimodalSlice)
+# 1. 输入侧 Schemas (MultimodalSlice - Local Copy for Isolation)
 # ==============================================================================
 
 
@@ -45,7 +44,7 @@ class FrameDataInput(BaseModel):
 
 class MultimodalSlice(BaseModel):
     """
-    [核心容器] 多模态切片。
+    [Input] 多模态切片输入。
     """
 
     slice_id: int
@@ -53,39 +52,53 @@ class MultimodalSlice(BaseModel):
     end_time: float
     type: str
     text_contents: List[SubtitleItem] = Field(default_factory=list)
-    slice_analysis: Optional[SliceAnalysis] = None
     visual_contents: List[FrameDataInput] = Field(default_factory=list)
     model_config = ConfigDict(extra="ignore")
 
 
-# ==============================================================================
-# 2. 任务 Payload
-# ==============================================================================
+class SliceAnalysis(BaseModel):
+    """
+    [Execution Schema] 切片分析结果
+    """
+
+    narrative_summary: Optional[str] = None
+    visual_summary: Optional[str] = None
+    tags: List[str] = Field(default_factory=list)
+    model_config = ConfigDict(extra="ignore")
 
 
-class SliceRegrouperServiceParams(BaseModel):
+class AnalyzedSlice(BaseModel):
+    """
+    [Execution Schema] 包含分析结果的切片
+    """
+
+    slice_id: int
+    slice_analysis: SliceAnalysis
+
+
+class SliceAnalyzerServiceParams(BaseModel):
     """Technical parameters for DEBUG mode"""
 
     model: Optional[str] = Field(None, description="LLM model name")
-    max_slices_per_batch: Optional[int] = Field(None, description="Slices per batch")
-    temperature: Optional[float] = Field(None, description="Temperature for LLM")
+    batch_size: Optional[int] = Field(None, description="Batch size")
+    temperature: Optional[float] = Field(None, description="Temperature")
     max_retries: Optional[int] = Field(None, description="Max retries")
 
 
-class SliceRegrouperPayload(BaseModel):
+class SliceAnalyzerPayload(BaseModel):
     """
-    [Execution Schema] REFINERY_SLICE_REGROUPER 任务载荷
+    [Execution Schema] REFINERY_SLICE_ANALYZER 任务载荷
     """
 
     lang: str = Field("zh", description="Language code")
     mode: Literal["PROD", "DEBUG"] = Field("PROD", description="Operation mode")
 
     # Data Source
-    slices_file_path: Optional[str] = Field(None, description="Path to the rich slices JSON file (Production)")
-    slices: Optional[List[MultimodalSlice]] = Field(None, description="Direct list of slices (Debug)")
+    slices_file_path: Optional[str] = Field(None, description="Path to rich slices JSON (Production)")
+    slices: Optional[List[MultimodalSlice]] = Field(None, description="Direct list (Debug)")
 
     # Debug Params
-    service_params: Optional[SliceRegrouperServiceParams] = Field(default_factory=SliceRegrouperServiceParams)
+    service_params: Optional[SliceAnalyzerServiceParams] = Field(default_factory=SliceAnalyzerServiceParams)
 
     @model_validator(mode="after")
     def check_data_source(self):
@@ -94,6 +107,6 @@ class SliceRegrouperPayload(BaseModel):
 
         if self.mode == "PROD":
             sp = self.service_params
-            if sp and (sp.model or sp.max_slices_per_batch or sp.temperature or sp.max_retries):
+            if sp and (sp.model or sp.batch_size or sp.temperature or sp.max_retries):
                 raise ValueError("In PROD mode, technical parameters are not allowed in payload.")
         return self

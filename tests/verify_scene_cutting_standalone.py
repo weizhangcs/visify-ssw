@@ -28,7 +28,7 @@ def format_content_for_subtitle(content_dict):
 
     # [New] 自动换行处理：每30个字符换一行，防止超出屏幕
     # [Fix] 针对竖屏视频，减少换行宽度
-    wrapped_lines = textwrap.wrap(raw_text, width=15)
+    wrapped_lines = textwrap.wrap(raw_text, width=30)
     subtitle_text = "\n".join(wrapped_lines)
 
     # 4. 为 ffmpeg drawtext 滤镜转义特殊字符
@@ -107,7 +107,7 @@ def verify_scene_cutting(video_path, json_path, output_dir):
         font_option = f"fontfile='{escaped_font_path}':"  # noqa E231
 
         # [Fix] 针对竖屏视频调整字体大小和边距
-        video_filter = f"drawtext=text='{subtitle_text}':{font_option}fontsize=36:fontcolor=white:x=(w-text_w)/2:y=(h-text_h)/2:box=1:boxcolor=black@0.6:boxborderw=15:line_spacing=8"  # noqa: E231,E501
+        video_filter = f"drawtext=text='{subtitle_text}':{font_option}fontsize=24:fontcolor=white:x=(w-text_w)/2:y=(h-text_h)/2:box=1:boxcolor=black@0.6:boxborderw=10:line_spacing=5"  # noqa: E231,E501
 
         cmd = [
             "ffmpeg",

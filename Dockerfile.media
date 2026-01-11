@@ -18,6 +18,8 @@ RUN sed -i "s|deb.debian.org|$APT_MIRROR|g" /etc/apt/sources.list.d/debian.sourc
         gcc \
         libsndfile1 \
         libpq-dev \
+        fonts-wqy-zenhei \
+        fonts-noto-cjk \
     && apt-get clean && \
     rm -rf /var/lib/apt/lists/*
 
