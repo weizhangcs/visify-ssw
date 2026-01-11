@@ -1,7 +1,7 @@
 from pathlib import Path
 from typing import Dict, List
 
-from ...schemas import FrameDataInput
+from apps.atomflow.refinery.schemas import FrameDataInput
 
 
 class FrameExtractContextMixin:

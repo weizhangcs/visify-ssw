@@ -42,6 +42,7 @@ INSTALLED_APPS = [
     "apps.configuration.apps.ConfigurationConfig",
     "apps.workflow.apps.WorkflowConfig",
     "apps.atomflow.apps.AtomflowConfig",
+    "apps.inference",
     # --- APP REGISTRY END ---
     "corsheaders",
     "solo",

@@ -4,25 +4,25 @@ from pathlib import Path
 
 from django.conf import settings
 
-from apps.common.atomflow.base_contexts import BaseAtomicContext
-
-from ..models import Material, RefineryAtomPipeline
-from .operators.audio_analyze import AudioAnalyzeContextMixin
-from .operators.character_refine import CharacterRefineContextMixin
-from .operators.frame_extract import FrameExtractContextMixin
-from .operators.frame_probe import FrameProbeContextMixin
-from .operators.hls import HLSContextMixin
-from .operators.probe import ProbeContextMixin
-from .operators.scene_verification import SceneVerificationContextMixin
-from .operators.slice_analyzer import SliceAnalyzerContextMixin
-from .operators.slice_regrouper import SliceRegrouperContextMixin
-from .operators.slicing import SlicingContextMixin
-from .operators.sync import SyncContextMixin
-from .operators.text_analyze import TextAnalyzeContextMixin
+from apps.atomflow.refinery.contexts.operators.audio_analyze import AudioAnalyzeContextMixin
+from apps.atomflow.refinery.contexts.operators.character_refine import CharacterRefineContextMixin
+from apps.atomflow.refinery.contexts.operators.frame_extract import FrameExtractContextMixin
+from apps.atomflow.refinery.contexts.operators.frame_probe import FrameProbeContextMixin
+from apps.atomflow.refinery.contexts.operators.hls import HLSContextMixin
+from apps.atomflow.refinery.contexts.operators.probe import ProbeContextMixin
+from apps.atomflow.refinery.contexts.operators.scene_verification import SceneVerificationContextMixin
+from apps.atomflow.refinery.contexts.operators.slice_analyzer import SliceAnalyzerContextMixin
+from apps.atomflow.refinery.contexts.operators.slice_regrouper import SliceRegrouperContextMixin
+from apps.atomflow.refinery.contexts.operators.slicing import SlicingContextMixin
+from apps.atomflow.refinery.contexts.operators.sync import SyncContextMixin
+from apps.atomflow.refinery.contexts.operators.text_analyze import TextAnalyzeContextMixin
 
 # 引入所有算子 Mixin
-from .operators.transcode import TranscodeContextMixin
-from .operators.visual_analyzer import VisualAnalyzerContextMixin
+from apps.atomflow.refinery.contexts.operators.transcode import TranscodeContextMixin
+from apps.atomflow.refinery.contexts.operators.vector_index import VectorIndexContextMixin
+from apps.atomflow.refinery.contexts.operators.visual_analyzer import VisualAnalyzerContextMixin
+from apps.atomflow.refinery.models import Material, RefineryAtomPipeline
+from apps.common.atomflow.base_contexts import BaseAtomicContext
 
 logger = logging.getLogger(__name__)
 
@@ -43,6 +43,7 @@ class RefineryAtomicContext(
     SliceAnalyzerContextMixin,
     SliceRegrouperContextMixin,
     SceneVerificationContextMixin,
+    VectorIndexContextMixin,
 ):
     """
     旁路业务上下文：负责 Material 与 算子之间的数据平配。

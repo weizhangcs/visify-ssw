@@ -1,4 +1,4 @@
-from ...schemas import MultimodalSlice
+from apps.atomflow.refinery.schemas import MultimodalSlice
 
 
 class SlicingContextMixin:
@@ -24,7 +24,7 @@ class SlicingContextMixin:
         return {
             "proxy_path": str(abs_proxy_path),
             "duration": target.duration,
-            "dialogue": target.dialogue,
+            "dialogues": target.dialogues,
             "waveform_data": target.waveform_data,
         }
 
@@ -51,7 +51,7 @@ class SlicingContextMixin:
         Returns:
             True if proxy video and dialogue exist, False otherwise.
         """
-        return bool(target.proxy_video) and bool(target.dialogue)
+        return bool(target.proxy_video) and bool(target.dialogues)
 
     def _check_slicing_done(self, target):
         """

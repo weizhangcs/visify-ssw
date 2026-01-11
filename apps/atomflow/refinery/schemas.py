@@ -4,6 +4,15 @@ from typing import List, Optional
 
 from pydantic import BaseModel, Field
 
+# ==============================================================================
+# SECTION 1: 核心持久化模型 (Core Persistence Models)
+# 对应 apps.atomflow.refinery.models.Material 中的 JSONField 存储结构
+# ==============================================================================
+
+# ------------------------------------------------------------------------------
+# 1.1 对白与音频 (Dialogue & Audio) -> Material.dialogues
+# ------------------------------------------------------------------------------
+
 
 class AudioAnalysis(BaseModel):
     """
@@ -27,7 +36,7 @@ class SubtitleItem(BaseModel):
     Refinery 全链路标准台词单元。
 
     1. 对齐 VSS Cloud 的 SubtitleInputItem。
-    2. 作为 Material.dialogue 列表元素的存储标准。
+    2. 作为 Material.dialogues 列表元素的存储标准。
     """
 
     index: int = Field(..., description="行号索引")
@@ -42,6 +51,11 @@ class SubtitleItem(BaseModel):
 
     class Config:
         extra = "ignore"  # 允许云端返回额外字段但不报错，保持向后兼容
+
+
+# ------------------------------------------------------------------------------
+# 1.2 视觉与关键帧 (Visual & Keyframes) -> Material.keyframe_map
+# ------------------------------------------------------------------------------
 
 
 class FrameData(BaseModel):
@@ -102,23 +116,9 @@ class FrameDataInput(FrameData):
     visual_analysis: Optional[VisualAnalysisData] = Field(default=None, description="云端 VLM 分析结果")
 
 
-class FrameDataOutput(BaseModel):
-    """
-    [结果数据] 帧数据输出容器 (VLM 识别结果)。
-    通常用于向前端展示或作为下游任务的输入。
-    """
-
-    timestamp: float = Field(..., description="帧在视频中的时间戳（秒）")
-    path: str = Field(..., description="云端路径")  # 最终的云端路径
-    # VLM 识别结果
-    shot_type: Optional[str] = Field(default=None, description="The camera shot size.")
-    subject: Optional[str] = Field(default=None, description="Main subject (Person/Object). Keep brief.")
-    action: Optional[str] = Field(default=None, description="Physical action occurring. Keep brief.")
-    visual_mood_tags: List[str] = Field(
-        default_factory=list, description="A list of 1-3 keywords describing the lighting and atmosphere."
-    )
-    # 原始的 L0/L1 数据也可以选择性保留
-    # probe_data: Dict = Field(default_factory=dict, description="本地帧探测结果")
+# ------------------------------------------------------------------------------
+# 1.3 切片 (Slices) -> Material.slices
+# ------------------------------------------------------------------------------
 
 
 class AudioContent(BaseModel):
@@ -156,6 +156,11 @@ class MultimodalSlice(BaseModel):
     slice_analysis: Optional[SliceAnalysis] = Field(default=None, description="切片语义分析结果")
 
 
+# ------------------------------------------------------------------------------
+# 1.4 技术元数据 (Technical Metadata) -> Material.tech_meta
+# ------------------------------------------------------------------------------
+
+
 class VideoStreamMeta(BaseModel):
     codec: Optional[str] = None
     width: Optional[int] = None
@@ -168,6 +173,11 @@ class TechMeta(BaseModel):
     container: Optional[str] = None
     size: int = 0
     video: VideoStreamMeta = Field(default_factory=VideoStreamMeta)
+
+
+# ------------------------------------------------------------------------------
+# 1.5 场景 (Scenes) -> Material.scenes
+# ------------------------------------------------------------------------------
 
 
 class SceneType(str, Enum):

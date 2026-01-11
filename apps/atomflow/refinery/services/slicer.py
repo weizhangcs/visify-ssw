@@ -5,7 +5,7 @@ import subprocess
 from pathlib import Path
 from typing import Dict, List
 
-from ..schemas import MultimodalSlice, SubtitleItem
+from apps.atomflow.refinery.schemas import MultimodalSlice, SubtitleItem
 
 logger = logging.getLogger(__name__)
 
@@ -24,7 +24,7 @@ class SlicingService:
     def run(
         video_path: Path,
         video_duration: float,
-        dialogue: List[Dict],
+        dialogues: List[Dict],
         waveform_data: List[float],
         # Optional Configs (Default values)
         scene_threshold: float = 0.3,
@@ -38,7 +38,7 @@ class SlicingService:
         Args:
             video_path: 视频文件路径。
             video_duration: 视频总时长。
-            dialogue: 对白数据。
+            dialogues: 对白数据。
             waveform_data: 音频波形数据。
             scene_threshold: 场景检测阈值 (0.0-1.0)。
             dialogue_gap: 对白合并的最大间隔 (秒)。
@@ -52,7 +52,7 @@ class SlicingService:
         scene_changes = SlicingService._detect_scene_changes(video_path, threshold=scene_threshold)
 
         # 2. 逻辑执行：对白分组 (合并紧凑对话，返回的 content 仅用于时间边界确定)
-        grouped_dialogues = SlicingService._group_dialogues(dialogue, gap_threshold=dialogue_gap)
+        grouped_dialogues = SlicingService._group_dialogues(dialogues, gap_threshold=dialogue_gap)
 
         # 3. 逻辑执行：基于声纹的动态 Padding (呼吸感)
         padded_dialogues = SlicingService._apply_waveform_padding(
@@ -64,7 +64,7 @@ class SlicingService:
             video_duration=video_duration,
             scene_changes=scene_changes,
             padded_dialogues=padded_dialogues,
-            original_dialogue=dialogue,  # 传入原始对白用于无损填充
+            original_dialogues=dialogues,  # 传入原始对白用于无损填充
         )
 
         return multimodal_slices
@@ -102,21 +102,21 @@ class SlicingService:
             raise RuntimeError(f"FFmpeg Scene Detection Failed: {e.stderr}")
 
     @staticmethod
-    def _group_dialogues(dialogue: List[Dict], gap_threshold: float = 1.0) -> List[Dict]:
+    def _group_dialogues(dialogues: List[Dict], gap_threshold: float = 1.0) -> List[Dict]:
         """
         [内部方法] 将间隔小于 gap_threshold 的对白合并为一个切片组。
 
         Args:
-            dialogue: 原始对白列表。
+            dialogues: 原始对白列表。
             gap_threshold: 合并阈值。
 
         Returns:
             合并后的对白组列表 (仅包含时间边界)。
         """
-        if not dialogue:
+        if not dialogues:
             return []
 
-        sorted_track = sorted(dialogue, key=lambda x: x.get("start_time", 0))
+        sorted_track = sorted(dialogues, key=lambda x: x.get("start_time", 0))
         groups = []
 
         # 初始化第一个组
@@ -210,7 +210,7 @@ class SlicingService:
         video_duration: float,
         scene_changes: List[float],
         padded_dialogues: List[Dict],
-        original_dialogue: List[Dict],
+        original_dialogues: List[Dict],
     ) -> List[Dict]:
         """
         [内部方法] 构建多模态切片容器的三步流程。
@@ -258,13 +258,13 @@ class SlicingService:
 
         # --- 步骤 3: 填充文本内容 (Text Hydration) ---
         # 预处理原始字幕，方便快速查找
-        subtitle_map = {item["index"]: item for item in original_dialogue}  # noqa: F841
+        subtitle_map = {item["index"]: item for item in original_dialogues}  # noqa: F841
 
         for m_slice in multimodal_slices:
             if m_slice.type == "dialogue":
                 # 筛选出时间戳落在该切片内的所有原始字幕行
                 contained_subtitles = []
-                for sub_item_data in original_dialogue:
+                for sub_item_data in original_dialogues:
                     sub_start = sub_item_data.get("start_time", 0)
                     if m_slice.start_time <= sub_start < m_slice.end_time:
                         # 使用 Pydantic 模型进行校验和实例化

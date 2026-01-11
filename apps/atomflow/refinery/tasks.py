@@ -3,6 +3,9 @@ from pathlib import Path
 
 from celery import shared_task
 
+from apps.atomflow.refinery.contexts.atomic import RefineryAtomicContext
+from apps.atomflow.refinery.contexts.pipeline import RefineryPipelineContext
+from apps.atomflow.refinery.scheduler import RefineryAtomScheduler
 from apps.atomflow.refinery.services.audio_analyzer import AudioAnalyzerService
 from apps.atomflow.refinery.services.character_refiner import CharacterRefinerService
 from apps.atomflow.refinery.services.frame_extractor import FrameExtractorService
@@ -18,12 +21,9 @@ from apps.atomflow.refinery.services.text_analyzer import TextAnalyzerService
 # 引入具体的业务 Service
 from apps.atomflow.refinery.services.transcoder import TranscodeService
 from apps.atomflow.refinery.services.uploader import TicketUploader
+from apps.atomflow.refinery.services.vector_indexer import VectorIndexService
 from apps.atomflow.refinery.services.visual_analyzer import VisualAnalyzerService
 from apps.common.cloud_client import CloudApiService
-
-from .contexts.atomic import RefineryAtomicContext
-from .contexts.pipeline import RefineryPipelineContext
-from .scheduler import RefineryAtomScheduler
 
 
 @shared_task(bind=True, name="apps.atomflow.refinery.tasks.execute_step")
@@ -129,7 +129,7 @@ def _dispatch_service(op_slug: str, payload: dict, target_id: str) -> dict:
     elif op_slug == "slicing":
         abs_proxy_path = Path(payload["proxy_path"])
         duration = payload["duration"]
-        dialogue = payload["dialogue"]
+        dialogues = payload["dialogues"]
         waveform_data = payload.get("waveform_data", [])
 
         # Extract optional configs from payload if they exist
@@ -141,7 +141,7 @@ def _dispatch_service(op_slug: str, payload: dict, target_id: str) -> dict:
         slices = SlicingService.run(
             abs_proxy_path,
             duration,
-            dialogue,
+            dialogues,
             waveform_data,
             scene_threshold=scene_threshold,
             dialogue_gap=dialogue_gap,
@@ -174,7 +174,7 @@ def _dispatch_service(op_slug: str, payload: dict, target_id: str) -> dict:
 
         temp_file = Path(f"/tmp/subtitle_merge_input_{target_id}.json")
         try:
-            dialogue = TextAnalyzerService.run(
+            dialogues = TextAnalyzerService.run(
                 content,
                 cloud_client=client,
                 temp_file_path=temp_file,
@@ -184,13 +184,13 @@ def _dispatch_service(op_slug: str, payload: dict, target_id: str) -> dict:
         finally:
             if temp_file.exists():
                 temp_file.unlink()
-        return {"dialogue": dialogue}
+        return {"dialogues": dialogues}
 
     elif op_slug == "audio_analyze":
         video_path = Path(payload["video_path"])
-        dialogue = payload["dialogue"]
-        updated_track = AudioAnalyzerService.run(video_path, dialogue)
-        return {"dialogue": updated_track}
+        dialogues = payload["dialogues"]
+        updated_track = AudioAnalyzerService.run(video_path, dialogues)
+        return {"dialogues": updated_track}
 
     elif op_slug == "character_refine":
         # 需要实例化 CloudClient
@@ -203,7 +203,7 @@ def _dispatch_service(op_slug: str, payload: dict, target_id: str) -> dict:
         }
 
         # [Update] 直接传递数据，Service 负责 Schema 转换和上传
-        result_data = CharacterRefinerService.run(client, payload["dialogue"], asset_meta)
+        result_data = CharacterRefinerService.run(client, payload["dialogues"], asset_meta)
         # 获取增量更新数据
         # Cloud 返回结构: {"identified_subtitles": [...], "stats": ...}
         updates = result_data.get("identified_subtitles", [])
@@ -247,6 +247,12 @@ def _dispatch_service(op_slug: str, payload: dict, target_id: str) -> dict:
         scenes = payload["scenes"]
         output_dir = Path(payload["output_dir"])
         return SceneVerificationService.run(video_path, scenes, output_dir)
+
+    elif op_slug == "vector_index":
+        slices = payload["slices"]
+        abs_output_path = Path(payload["output_path"])
+        VectorIndexService.run(slices, abs_output_path)
+        return {"rel_path": payload["rel_path"]}
 
     else:
         raise ValueError(f"Unknown operator slug: {op_slug}")

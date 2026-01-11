@@ -46,3 +46,4 @@ htmlcov/
 /frontend/node_modules/
 /tests/testdata/
 /doc/
+/local_models/

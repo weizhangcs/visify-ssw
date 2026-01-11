@@ -11,7 +11,7 @@ try:
 except ImportError:
     librosa = None
 
-from ..schemas import AudioAnalysis, SubtitleItem
+from apps.atomflow.refinery.schemas import AudioAnalysis, SubtitleItem
 
 logger = logging.getLogger(__name__)
 
@@ -28,23 +28,23 @@ class AudioAnalyzerService:
     """
 
     @staticmethod
-    def run(video_path: Path, dialogue: List[Dict]) -> List[Dict]:
+    def run(video_path: Path, dialogues: List[Dict]) -> List[Dict]:
         """
         执行音频分析任务。
 
         Args:
             video_path: 视频文件路径 (用于提取音频)。
-            dialogue: 对白数据。
+            dialogues: 对白数据。
 
         Returns:
             更新后的对白数据 (带有 audio_analysis)。
         """
-        if not dialogue:
+        if not dialogues:
             return []
 
         if librosa is None:
             logger.error("AudioAnalyzer: librosa not installed. Skipping analysis.")
-            return dialogue
+            return dialogues
 
         logger.info(f"AudioAnalyzer: Loading audio from {video_path}...")
 
@@ -54,11 +54,11 @@ class AudioAnalyzerService:
             y, sr = librosa.load(str(video_path), sr=16000, mono=True)
         except Exception as e:
             logger.error(f"AudioAnalyzer: Failed to load audio: {e}")
-            return dialogue
+            return dialogues
 
         updated_track = []
 
-        for item_dict in dialogue:
+        for item_dict in dialogues:
             # 确保数据结构正确
             item = SubtitleItem(**item_dict)
 

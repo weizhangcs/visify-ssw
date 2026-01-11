@@ -20,25 +20,25 @@ class CharacterRefinerService:
     """
 
     @staticmethod
-    def run(client: CloudApiService, dialogue_data: List[Dict], asset_meta: Dict[str, Any]) -> Dict[str, Any]:
+    def run(client: CloudApiService, dialogues: List[Dict], asset_meta: Dict[str, Any]) -> Dict[str, Any]:
         """
         执行角色识别任务。
 
         Args:
             client: CloudApiService 实例。
-            dialogue_data: 对白轨道数据列表。
+            dialogues: 对白轨道数据列表。
             asset_meta: 资产元数据 (video_title, known_characters, lang)。
 
         Returns:
             分析结果字典 (包含 identified_subtitles)。
         """
-        if not dialogue_data:
+        if not dialogues:
             logger.warning("CharacterRefiner: No dialogue data provided.")
             return {"identified_subtitles": []}
 
         # 1. 数据转换 (Dict -> Execution Schema)
         exec_items = []
-        for item in dialogue_data:
+        for item in dialogues:
             # 处理多模态音频分析数据
             audio_analysis = None
             if item.get("audio_analysis"):

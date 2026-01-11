@@ -92,7 +92,9 @@ class Material(TimeStampedModel):
     注意：它不再维护状态 (Status)，状态由关联的 RefineryAtomPipeline 接管。
     """
 
-    # --- 1. 身份与关联 ---
+    # ==========================================================================
+    # 1. 身份与关联 (Identity & Relations)
+    # ==========================================================================
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
 
     # 采用 OneToOne 建立物料与媒体的一一映射
@@ -100,30 +102,33 @@ class Material(TimeStampedModel):
         "media_assets.Media", on_delete=models.CASCADE, related_name="material", verbose_name=_("源媒体文件")
     )
 
-    # --- 2. 本地标准化产出 (Local Artifacts) ---
+    # ==========================================================================
+    # 2. 本地标准化产出 (Local Artifacts)
+    # ==========================================================================
     proxy_video = models.CharField(max_length=1024, blank=True, verbose_name=_("代理视频 (720p)地址"))
     hls_playlist = models.CharField(max_length=1024, blank=True, verbose_name=_("HLS 播放列表索引文件地址"))
     waveform_data = models.JSONField(default=list, blank=True, verbose_name=_("波形JSON"))
 
-    # --- 3. 结构化生产数据 (Structured Data) ---
-    dialogue = models.JSONField(default=list, blank=True, verbose_name=_("结构化对白数据"))
-    slices = models.JSONField(default=list, blank=True, verbose_name=_("多模态切片索引"))
-
-    # 关键帧映射表：存储所有关键帧的元数据（本地路径、云端路径、分析结果等）
-    # 结构参考 schemas.FrameDataInput
+    # ==========================================================================
+    # 3. 结构化生产数据 (Structured Data)
+    # ==========================================================================
+    # [Renamed] dialogue -> dialogues (保持复数一致性)
+    slices = models.JSONField(default=list, blank=True, verbose_name=_("多模态切片容器"))
+    scenes = models.JSONField(default=list, blank=True, verbose_name=_("场景容器"))
+    dialogues = models.JSONField(default=list, blank=True, verbose_name=_("对白容器"))
     keyframe_map = models.JSONField(default=dict, blank=True, verbose_name=_("关键帧映射表"))
 
-    scenes = models.JSONField(default=list, blank=True, verbose_name=_("场景列表"))
-    # --- 4. 云端锚点 (Cloud Anchors) ---
-    # 记录同步到 GCS/S3 后的路径，供下游 Inference 直接引用
-    cloud_proxy_path = models.CharField(max_length=1024, blank=True, null=True)
-    cloud_slices_path = models.CharField(max_length=1024, blank=True, null=True)
-    cloud_dialogue_path = models.CharField(max_length=1024, blank=True, null=True)
+    # ==========================================================================
+    # 4. 搜索与索引 (Search & Indexing)
+    # ==========================================================================
+    slice_vector_index_path = models.CharField(max_length=1024, blank=True, null=True, verbose_name=_("切片向量索引路径"))
+    scene_vector_index_path = models.CharField(max_length=1024, blank=True, null=True, verbose_name=_("场景向量索引路径"))
 
-    # --- 5. 技术元数据与异常记录 ---
+    # ==========================================================================
+    # 5. 技术元数据 (Technical Metadata)
+    # ==========================================================================
     duration = models.FloatField(default=0.0, verbose_name=_("物理时长"))
     tech_meta = models.JSONField(default=dict, blank=True, verbose_name=_("FFprobe 元数据"))
-    error_log = models.TextField(blank=True, default="", verbose_name=_("错误日志"))
 
     class Meta:
         verbose_name = _("精炼物料")

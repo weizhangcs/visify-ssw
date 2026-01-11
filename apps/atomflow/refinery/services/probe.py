@@ -6,7 +6,7 @@ import subprocess
 from pathlib import Path
 from typing import Dict, List, Tuple
 
-from ..schemas import TechMeta, VideoStreamMeta
+from apps.atomflow.refinery.schemas import TechMeta, VideoStreamMeta
 
 logger = logging.getLogger(__name__)
 

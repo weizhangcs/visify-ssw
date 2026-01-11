@@ -1,7 +1,7 @@
 import copy
 from typing import Dict
 
-from ...schemas import FrameDataInput
+from apps.atomflow.refinery.schemas import FrameDataInput
 
 
 class SyncContextMixin:

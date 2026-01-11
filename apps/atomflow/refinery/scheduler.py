@@ -21,7 +21,7 @@ class RefineryAtomScheduler(BaseAtomScheduler):
         """
         [Entry Point] 启动流水线：查找入口节点并点火。
         """
-        from .models import RefineryAtomPipeline
+        from apps.atomflow.refinery.models import RefineryAtomPipeline
 
         try:
             pipeline = RefineryAtomPipeline.objects.select_related("rule").get(id=pipeline_id)
@@ -135,7 +135,7 @@ class RefineryAtomScheduler(BaseAtomScheduler):
                 break
 
         if all_finished:
-            from .models import RefineryAtomPipeline
+            from apps.atomflow.refinery.models import RefineryAtomPipeline
 
             if pipeline.status != RefineryAtomPipeline.Status.SUCCESS:
                 logger.info(f"Pipeline {pipeline.id} finished successfully.")

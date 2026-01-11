@@ -39,6 +39,7 @@ def run_flow_test():
         {"seq": 11, "unit_slug": "visual_analyzer", "name": "视觉识别", "obligation": "REQUIRED", "dependence": [10]},
         {"seq": 12, "unit_slug": "slice_analyzer", "name": "切片分析", "obligation": "REQUIRED", "dependence": [11]},
         {"seq": 13, "unit_slug": "slice_regrouper", "name": "切片聚类", "obligation": "REQUIRED", "dependence": [12]},
+        {"seq": 14, "unit_slug": "vector_index", "name": "向量索引", "obligation": "REQUIRED", "dependence": [12]},
     ]
 
     rule, _ = RefineryAtomRule.objects.update_or_create(
@@ -49,7 +50,7 @@ def run_flow_test():
 
     # 2. 准备业务物料 (Material)
     # 自动寻找一个有源视频的 Media，如果未关联 Material 则自动创建
-    media = Media.objects.get(title="EP02")
+    media = Media.objects.get(title="001")
     if not media:
         print("❌ 错误：Media 库中没有可用的视频资源。请先在系统中上传至少一个视频文件。")
         return
@@ -124,6 +125,7 @@ def run_flow_test():
             print(f"Proxy Path: {material.proxy_video}")
             print(f"HLS Path: {material.hls_playlist}")
             print(f"Duration: {material.duration}")
+            print(f"Vector Index: {material.local_vector_index_path}")
             return
 
     print("\n⚠️ 测试超时！Worker 可能未响应或处理过慢。")

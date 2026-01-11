@@ -1,8 +1,7 @@
 import logging
 
+from apps.atomflow.refinery.models import RefineryAtomPipeline
 from apps.common.atomflow.base_contexts import BasePipelineContext
-
-from ..models import RefineryAtomPipeline
 
 logger = logging.getLogger(__name__)
 

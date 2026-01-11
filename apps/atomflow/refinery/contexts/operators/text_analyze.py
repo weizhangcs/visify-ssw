@@ -44,9 +44,9 @@ class TextAnalyzeContextMixin:
 
         Args:
             target: The Material instance.
-            result: A dictionary containing the 'dialogue' list.
+            result: A dictionary containing the 'dialogues' list.
         """
-        target.dialogue = result.get("dialogue", [])
+        target.dialogues = result.get("dialogues", [])
 
     def _check_text_analyze_ready(self, target):
         """
@@ -70,4 +70,4 @@ class TextAnalyzeContextMixin:
         Returns:
             True if dialogue is populated, False otherwise.
         """
-        return bool(target.dialogue)
+        return bool(target.dialogues)

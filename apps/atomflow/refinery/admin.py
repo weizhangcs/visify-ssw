@@ -5,10 +5,9 @@ from django.urls import path, reverse
 from django.utils.html import format_html
 from unfold.admin import ModelAdmin
 
+from apps.atomflow.refinery.models import Material, RefineryAtomPipeline, RefineryAtomRule
+from apps.atomflow.refinery.scheduler import RefineryAtomScheduler
 from apps.media_assets.models import Media
-
-from .models import Material, RefineryAtomPipeline, RefineryAtomRule
-from .scheduler import RefineryAtomScheduler
 
 # --- Forms ---
 

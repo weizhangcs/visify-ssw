@@ -2,7 +2,7 @@ import logging
 from pathlib import Path
 from typing import Any, Dict, List, Tuple
 
-from ..schemas import FrameDataInput
+from apps.atomflow.refinery.schemas import FrameDataInput
 
 logger = logging.getLogger(__name__)
 

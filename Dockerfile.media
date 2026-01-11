@@ -30,7 +30,12 @@ COPY requirements.base.txt .
 COPY requirements.media.txt .
 RUN pip install --upgrade pip && \
     pip install --no-cache-dir -i ${PIP_MIRROR_URL} -r requirements.media.txt && \
-    pip install --no-cache-dir -i ${PIP_MIRROR_URL} opencv-python numpy librosa
+    pip install --no-cache-dir -i ${PIP_MIRROR_URL} opencv-python numpy librosa sentence-transformers faiss-cpu
+
+# [变更] 离线模式：将本地预下载的模型复制到镜像中
+# 对应 scripts/download_model.py 下载的目录
+COPY local_models /app/local_models
+
 COPY . .
 
 RUN useradd -m appuser && chown -R appuser:appuser /app

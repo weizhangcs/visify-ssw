@@ -21,7 +21,7 @@ class AudioAnalyzeContextMixin:
 
         return {
             "video_path": str(abs_proxy_path),
-            "dialogue": target.dialogue,
+            "dialogues": target.dialogues,
         }
 
     def _handle_audio_analyze(self, target, result):
@@ -32,9 +32,9 @@ class AudioAnalyzeContextMixin:
 
         Args:
             target: The Material instance.
-            result: A dictionary containing the updated 'dialogue'.
+            result: A dictionary containing the updated 'dialogues'.
         """
-        target.dialogue = result.get("dialogue", [])
+        target.dialogues = result.get("dialogues", [])
 
     def _check_audio_analyze_ready(self, target):
         """
@@ -46,7 +46,7 @@ class AudioAnalyzeContextMixin:
         Returns:
             True if proxy video and dialogue exist, False otherwise.
         """
-        return bool(target.proxy_video) and bool(target.dialogue)
+        return bool(target.proxy_video) and bool(target.dialogues)
 
     def _check_audio_analyze_done(self, target):
         """
@@ -58,7 +58,7 @@ class AudioAnalyzeContextMixin:
         Returns:
             True if at least one item in the dialogue has audio analysis data.
         """
-        if not target.dialogue:
+        if not target.dialogues:
             return False
         # Check if at least one item has audio_analysis
-        return any(item.get("audio_analysis") for item in target.dialogue)
+        return any(item.get("audio_analysis") for item in target.dialogues)

@@ -7,7 +7,7 @@ import subprocess
 from pathlib import Path
 from typing import Dict, List, Tuple
 
-from ..schemas import FrameDataInput, MultimodalSlice
+from apps.atomflow.refinery.schemas import FrameDataInput, MultimodalSlice
 
 logger = logging.getLogger(__name__)
 

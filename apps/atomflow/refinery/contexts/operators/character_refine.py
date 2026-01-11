@@ -21,7 +21,7 @@ class CharacterRefineContextMixin:
             lang = asset.language.split("-")[0]
 
         return {
-            "dialogue": target.dialogue,
+            "dialogues": target.dialogues,
             "video_title": target.media.title,
             "known_characters": asset.known_characters if asset else [],
             "lang": lang,
@@ -39,7 +39,7 @@ class CharacterRefineContextMixin:
             result: A dictionary containing a list of 'updates' (mapped from identified_subtitles).
         """
         updates = result.get("updates", [])
-        original_track = target.dialogue
+        original_track = target.dialogues
 
         # Create a map for efficient lookups
         updates_map = {u.get("index"): u for u in updates if "index" in u}
@@ -58,7 +58,7 @@ class CharacterRefineContextMixin:
 
             merged_track.append(new_item)
 
-        target.dialogue = merged_track
+        target.dialogues = merged_track
 
     def _check_character_refine_ready(self, target):
         """
@@ -70,7 +70,7 @@ class CharacterRefineContextMixin:
         Returns:
             True if the dialogue is populated, False otherwise.
         """
-        return bool(target.dialogue)
+        return bool(target.dialogues)
 
     def _check_character_refine_done(self, target):
         """

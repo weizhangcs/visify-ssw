@@ -1,6 +1,6 @@
 import logging
 
-from ...schemas import Scene, SceneContent
+from apps.atomflow.refinery.schemas import Scene, SceneContent
 
 logger = logging.getLogger(__name__)
 
