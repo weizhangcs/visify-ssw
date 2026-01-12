@@ -1,11 +1,18 @@
-class HLSContextMixin:
+from pathlib import Path
+
+
+class GenerateHLSContextMixin:
     """
     Context Mixin for HLS (HTTP Live Streaming) generation.
 
     Provides methods to generate payloads for and handle results from the HLSService.
     """
 
-    def _payload_hls(self, target):
+    @property
+    def media_root(self) -> Path:
+        raise NotImplementedError
+
+    def _payload_generate_hls(self, target):
         """
         Generate payload for the HLSService.
 
@@ -28,7 +35,7 @@ class HLSContextMixin:
             "rel_path": f"{rel_dir}/index.m3u8",
         }
 
-    def _handle_hls(self, target, result):
+    def _handle_generate_hls(self, target, result):
         """
         Handle the result from the HLSService.
 
@@ -38,7 +45,7 @@ class HLSContextMixin:
         """
         target.hls_playlist = result.get("rel_path")
 
-    def _check_hls_ready(self, target):
+    def _check_generate_hls_ready(self, target):
         """
         Check if the HLS task is ready to run.
 
@@ -50,7 +57,7 @@ class HLSContextMixin:
         """
         return bool(target.proxy_video)
 
-    def _check_hls_done(self, target):
+    def _check_generate_hls_done(self, target):
         """
         Check if the HLS task has already been completed.
 

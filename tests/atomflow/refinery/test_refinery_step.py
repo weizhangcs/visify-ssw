@@ -25,7 +25,8 @@ def run_flow_test():
     # 算子化框架必须依赖配置，我们先在数据库创建一个临时的测试规则
     # 全量编排：Transcode -> Probe -> HLS -> Text -> Char -> Slicing -> Frame -> Sync
     rules_json = [
-        {"seq": 14, "unit_slug": "vector_index", "name": "向量索引", "obligation": "REQUIRED"},
+        {"seq": 4, "unit_slug": "text_analyze", "name": "文本分析", "obligation": "REQUIRED"},
+        {"seq": 5, "unit_slug": "audio_analyze", "name": "声纹分析", "obligation": "REQUIRED", "dependence": [4]},
     ]
 
     rule, _ = RefineryAtomRule.objects.update_or_create(

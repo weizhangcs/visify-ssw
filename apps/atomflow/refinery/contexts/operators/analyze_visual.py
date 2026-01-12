@@ -1,18 +1,18 @@
 import logging
 
-from apps.atomflow.refinery.schemas import VisualAnalysisData
+from apps.atomflow.refinery.schemas import VisualAnalysis
 
 logger = logging.getLogger(__name__)
 
 
-class VisualAnalyzerContextMixin:
+class AnalyzeVisualContextMixin:
     """
     Context Mixin for visual analysis via Cloud VLM.
 
     Provides methods to generate payloads for and handle results from the VisualAnalyzerService.
     """
 
-    def _payload_visual_analyzer(self, target):
+    def _payload_analyze_visual(self, target):
         """
         Generate payload for the VisualAnalyzerService.
 
@@ -65,7 +65,7 @@ class VisualAnalyzerContextMixin:
             "lang": lang,
         }
 
-    def _handle_visual_analyzer(self, target, result):
+    def _handle_analyze_visual(self, target, result):
         """
         Handle the result from the VisualAnalyzerService.
 
@@ -97,7 +97,7 @@ class VisualAnalyzerContextMixin:
                             raw_data = analysis_map[digest].copy()
 
                             # Use Pydantic to validate and structure the data
-                            va_data = VisualAnalysisData(**raw_data)
+                            va_data = VisualAnalysis(**raw_data)
                             frame_data["visual_analysis"] = va_data.model_dump()
                         except Exception as e:
                             logger.warning(f"Failed to parse visual_analysis for digest {digest}: {e}")
@@ -107,7 +107,7 @@ class VisualAnalyzerContextMixin:
 
         target.keyframe_map = updated_map
 
-    def _check_visual_analyzer_ready(self, target):
+    def _check_analyze_visual_ready(self, target):
         """
         Check if the Visual Analyzer task is ready to run.
 
@@ -124,7 +124,7 @@ class VisualAnalyzerContextMixin:
             f.get("path", "").startswith(("http", "gs://")) for frames in target.keyframe_map.values() for f in frames
         )
 
-    def _check_visual_analyzer_done(self, target):
+    def _check_analyze_visual_done(self, target):
         """
         Check if the Visual Analyzer task has already been completed.
 

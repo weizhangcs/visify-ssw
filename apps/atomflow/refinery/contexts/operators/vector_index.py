@@ -1,7 +1,14 @@
+from pathlib import Path
+
+
 class VectorIndexContextMixin:
     """
     Context Mixin for local vector indexing.
     """
+
+    @property
+    def media_root(self) -> Path:
+        raise NotImplementedError
 
     def _payload_vector_index(self, target):
         """
@@ -17,7 +24,7 @@ class VectorIndexContextMixin:
         """
         Handle result: Update Material.local_vector_index_path.
         """
-        target.local_vector_index_path = result.get("rel_path")
+        target.slice_vector_index_path = result.get("rel_path")
 
     def _check_vector_index_ready(self, target):
         """
@@ -33,4 +40,4 @@ class VectorIndexContextMixin:
         """
         Done if local_vector_index_path is populated.
         """
-        return bool(target.local_vector_index_path)
+        return bool(target.slice_vector_index_path)

@@ -1,14 +1,20 @@
-from apps.atomflow.refinery.schemas import MultimodalSlice
+from pathlib import Path
+
+from apps.atomflow.refinery.schemas import Slice
 
 
-class SlicingContextMixin:
+class SliceContextMixin:
     """
     Context Mixin for visual slicing.
 
     Provides methods to generate payloads for and handle results from the SlicingService.
     """
 
-    def _payload_slicing(self, target):
+    @property
+    def media_root(self) -> Path:
+        raise NotImplementedError
+
+    def _payload_slice(self, target):
         """
         Generate payload for the SlicingService.
 
@@ -28,7 +34,7 @@ class SlicingContextMixin:
             "waveform_data": target.waveform_data,
         }
 
-    def _handle_slicing(self, target, result):
+    def _handle_slice(self, target, result):
         """
         Handle the result from the SlicingService.
 
@@ -39,9 +45,9 @@ class SlicingContextMixin:
             result: A dictionary containing a list of 'slices'.
         """
         raw_slices = result.get("slices", [])
-        target.slices = [MultimodalSlice(**s).model_dump() for s in raw_slices]
+        target.slices = [Slice(**s).model_dump() for s in raw_slices]
 
-    def _check_slicing_ready(self, target):
+    def _check_slice_ready(self, target):
         """
         Check if the Slicing task is ready to run.
 
@@ -53,7 +59,7 @@ class SlicingContextMixin:
         """
         return bool(target.proxy_video) and bool(target.dialogues)
 
-    def _check_slicing_done(self, target):
+    def _check_slice_done(self, target):
         """
         Check if the Slicing task has already been completed.
 

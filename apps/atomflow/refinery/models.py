@@ -116,6 +116,7 @@ class Material(TimeStampedModel):
     slices = models.JSONField(default=list, blank=True, verbose_name=_("多模态切片容器"))
     scenes = models.JSONField(default=list, blank=True, verbose_name=_("场景容器"))
     dialogues = models.JSONField(default=list, blank=True, verbose_name=_("对白容器"))
+    identified_characters = models.JSONField(default=list, blank=True, verbose_name=_("识别角色清单"))
     keyframe_map = models.JSONField(default=dict, blank=True, verbose_name=_("关键帧映射表"))
 
     # ==========================================================================

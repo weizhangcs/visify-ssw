@@ -1,16 +1,21 @@
 import logging
+from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
 
-class SceneVerificationContextMixin:
+class VerifySceneContextMixin:
     """
     Context Mixin for scene verification (debug operator).
     """
 
-    def _payload_scene_verification(self, target):
+    @property
+    def media_root(self) -> Path:
+        raise NotImplementedError
+
+    def _payload_verify_scene(self, target):
         """
-        Generate payload for SceneVerificationService.
+        Generate payload for SceneVerifierService.
         """
         # 优先使用 Proxy，其次使用 Source
         video_path = ""
@@ -28,7 +33,7 @@ class SceneVerificationContextMixin:
             "output_dir": str(output_dir),
         }
 
-    def _handle_scene_verification(self, target, result):
+    def _handle_verify_scene(self, target, result):
         """
         Handle result: Log the output location.
         """

@@ -2,12 +2,12 @@ import logging
 from pathlib import Path
 from typing import Any, Dict, List, Tuple
 
-from apps.atomflow.refinery.schemas import FrameDataInput
+from apps.atomflow.refinery.schemas import KeyframeItem
 
 logger = logging.getLogger(__name__)
 
 
-class FrameProbeService:
+class FrameProberService:
     """
     [分析算子] 帧质量探测服务 (L0 特征)。
 
@@ -34,7 +34,7 @@ class FrameProbeService:
             import cv2
         except ImportError:
             raise RuntimeError(
-                "FrameProbeService: cv2 or numpy not found. This task must run on a media-enabled worker."
+                "FrameProberService: cv2 or numpy not found. This task must run on a media-enabled worker."
             )
 
         logger.info(f"Frame Probe Start: {len(keyframe_map)} slices in keyframe_map to analyze.")
@@ -47,8 +47,8 @@ class FrameProbeService:
         for slice_id, frames_list_dict in keyframe_map.items():
             updated_frames_for_slice = []
             for frame_data_dict in frames_list_dict:
-                # 确保操作的是 FrameDataInput 实例，并进行深拷贝以避免修改原始对象
-                frame = FrameDataInput(**frame_data_dict)
+                # 确保操作的是 KeyframeItem 实例，并进行深拷贝以避免修改原始对象
+                frame = KeyframeItem(**frame_data_dict)
                 abs_path = media_root / frame.path
 
                 # 如果路径已经是云端路径 (gs:// 或 http://)，说明已同步，跳过本地探测
@@ -90,7 +90,7 @@ class FrameProbeService:
                         fm = cv2.Laplacian(gray, cv2.CV_64F).var()  # 模糊度分数，越高越清晰
 
                     # 3. 黑/白帧检测
-                    is_black, is_white = FrameProbeService._is_black_or_white_frame(gray)
+                    is_black, is_white = FrameProberService._is_black_or_white_frame(gray)
 
                     if is_black:
                         frame.filter_reason = "black_frame"

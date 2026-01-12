@@ -1,7 +1,7 @@
 from pathlib import Path
 from typing import Dict, List
 
-from apps.atomflow.refinery.schemas import FrameDataInput
+from apps.atomflow.refinery.schemas import KeyframeItem
 
 
 class FrameExtractContextMixin:
@@ -10,6 +10,10 @@ class FrameExtractContextMixin:
 
     Provides methods to generate payloads for and handle results from the FrameExtractorService.
     """
+
+    @property
+    def media_root(self) -> Path:
+        raise NotImplementedError
 
     def _payload_frame_extract(self, target):
         """
@@ -44,9 +48,9 @@ class FrameExtractContextMixin:
             target: The Material instance.
             result: The keyframe_map dictionary (slice_id -> frame_list).
         """
-        # Ensure keyframe_map stores valid FrameDataInput objects
+        # Ensure keyframe_map stores valid KeyframeItem objects
         processed_map = {
-            slice_id: [FrameDataInput(**frame_data).model_dump() for frame_data in frames]
+            slice_id: [KeyframeItem(**frame_data).model_dump() for frame_data in frames]
             for slice_id, frames in result.items()
         }
         target.keyframe_map = processed_map

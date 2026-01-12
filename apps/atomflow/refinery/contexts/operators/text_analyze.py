@@ -1,9 +1,16 @@
+from pathlib import Path
+
+
 class TextAnalyzeContextMixin:
     """
     Context Mixin for text analysis (subtitle processing).
 
     Provides methods to generate payloads for and handle results from the TextAnalyzerService.
     """
+
+    @property
+    def media_root(self) -> Path:
+        raise NotImplementedError
 
     def _payload_text_analyze(self, target):
         """

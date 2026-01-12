@@ -1,9 +1,16 @@
+from pathlib import Path
+
+
 class AudioAnalyzeContextMixin:
     """
     Context Mixin for audio analysis.
 
     Provides methods to generate payloads for and handle results from the AudioAnalyzerService.
     """
+
+    @property
+    def media_root(self) -> Path:
+        raise NotImplementedError
 
     def _payload_audio_analyze(self, target):
         """
@@ -19,9 +26,15 @@ class AudioAnalyzeContextMixin:
         proxy_rel = target.proxy_video
         abs_proxy_path = self.media_root / proxy_rel
 
+        asset = getattr(target.media, "asset", None)
+        lang = "zh"
+        if asset and asset.language:
+            lang = asset.language.split("-")[0]
+
         return {
             "video_path": str(abs_proxy_path),
             "dialogues": target.dialogues,
+            "lang": lang,
         }
 
     def _handle_audio_analyze(self, target, result):

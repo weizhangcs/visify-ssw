@@ -8,6 +8,10 @@ class TranscodeContextMixin:
     Provides methods to generate payloads for and handle results from the TranscodeService.
     """
 
+    @property
+    def media_root(self) -> Path:
+        raise NotImplementedError
+
     def _payload_transcode(self, target):
         """
         Generate payload for the TranscodeService.

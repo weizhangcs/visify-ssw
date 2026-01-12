@@ -1,4 +1,4 @@
-# apps/atomflow/refinery/services/scene_verification.py
+# apps/atomflow/refinery/services/scene_verifier.py
 
 import logging
 import os
@@ -11,7 +11,7 @@ from typing import Any, Dict, List
 logger = logging.getLogger(__name__)
 
 
-class SceneVerificationService:
+class SceneVerifierService:
     """
     [Refinery Operator] 场景切分验证服务 (本地调试用)。
     根据 Material.scenes 的时间戳，物理切分视频并烧录元数据字幕，用于人工核查切分准确性。
@@ -29,7 +29,7 @@ class SceneVerificationService:
 
         output_dir.mkdir(parents=True, exist_ok=True)
 
-        font_path = SceneVerificationService._get_font_path()
+        font_path = SceneVerifierService._get_font_path()
         logger.info(f"Using font: {font_path}")
 
         success_count = 0
@@ -51,7 +51,7 @@ class SceneVerificationService:
             output_filename = f"scene_{scene_id:03d}_subtitled.mp4"  # noqa：E231
             output_path = output_dir / output_filename
 
-            subtitle_text = SceneVerificationService._format_content_for_subtitle(content)
+            subtitle_text = SceneVerifierService._format_content_for_subtitle(content)
 
             # Build FFmpeg command
             font_option = ""

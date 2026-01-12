@@ -1,4 +1,6 @@
-from apps.atomflow.refinery.schemas import FrameDataInput
+from pathlib import Path
+
+from apps.atomflow.refinery.schemas import KeyframeItem
 
 
 class FrameProbeContextMixin:
@@ -7,6 +9,10 @@ class FrameProbeContextMixin:
 
     Provides methods to generate payloads for and handle results from the FrameProbeService.
     """
+
+    @property
+    def media_root(self) -> Path:
+        raise NotImplementedError
 
     def _payload_frame_probe(self, target):
         """
@@ -31,10 +37,10 @@ class FrameProbeContextMixin:
             target: The Material instance.
             result: The updated keyframe_map dictionary.
         """
-        # Ensure keyframe_map stores valid FrameDataInput objects
+        # Ensure keyframe_map stores valid KeyframeItem objects
         # Full replacement naturally supports writing back redundant data
         processed_map = {
-            slice_id: [FrameDataInput(**frame_data).model_dump() for frame_data in frames]
+            slice_id: [KeyframeItem(**frame_data).model_dump() for frame_data in frames]
             for slice_id, frames in result.items()
         }
         target.keyframe_map = processed_map

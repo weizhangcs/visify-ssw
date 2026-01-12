@@ -1,17 +1,20 @@
 # apps/atomflow/refinery/services/audio_analyzer.py
 import logging
+import subprocess
+import tempfile
 from pathlib import Path
-from typing import Dict, List
+from typing import Any, Dict, List
 
 import numpy as np
 
 # 这是一个重量级库，建议在 Dockerfile.media 中添加: pip install librosa
+librosa: Any = None  # [Fix] Type hint as Any to suppress IDE warnings about None.load/pyin
 try:
     import librosa
 except ImportError:
     librosa = None
 
-from apps.atomflow.refinery.schemas import AudioAnalysis, SubtitleItem
+from apps.atomflow.refinery.schemas import AudioAnalysis, SubtitleItem  # noqa: E402
 
 logger = logging.getLogger(__name__)
 
@@ -28,13 +31,14 @@ class AudioAnalyzerService:
     """
 
     @staticmethod
-    def run(video_path: Path, dialogues: List[Dict]) -> List[Dict]:
+    def run(video_path: Path, dialogues: List[Dict], lang: str = "zh") -> List[Dict]:
         """
         执行音频分析任务。
 
         Args:
             video_path: 视频文件路径 (用于提取音频)。
             dialogues: 对白数据。
+            lang: 语言代码 (zh/en)。
 
         Returns:
             更新后的对白数据 (带有 audio_analysis)。
@@ -48,13 +52,42 @@ class AudioAnalyzerService:
 
         logger.info(f"AudioAnalyzer: Loading audio from {video_path}...")
 
+        # [Fix] 使用临时文件显式提取音频，避免 librosa 直接读取视频容器导致的 PySoundFile 警告和 audioread 废弃警告
+        with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as tmp:
+            temp_wav_path = Path(tmp.name)
+
         try:
-            # 1. 加载音频 (重采样到 16kHz 以提升 F0 分析速度)
-            # librosa 支持直接从视频文件读取音频 (依赖 ffmpeg)
-            y, sr = librosa.load(str(video_path), sr=16000, mono=True)
+            # 1. 使用 FFmpeg 提取音频 (预处理：单声道 + 16kHz)
+            cmd = [
+                "ffmpeg",
+                "-y",
+                "-v",
+                "error",
+                "-i",
+                str(video_path),
+                "-vn",  # 禁用视频流
+                "-ac",
+                "1",  # 单声道
+                "-ar",
+                "16000",  # 重采样至 16kHz
+                "-f",
+                "wav",
+                str(temp_wav_path),
+            ]
+            subprocess.run(cmd, check=True, capture_output=True)
+
+            # 2. 加载 WAV 文件 (此时 soundfile 后端可以完美处理)
+            y, sr = librosa.load(str(temp_wav_path), sr=16000, mono=True)
+
+        except subprocess.CalledProcessError as e:
+            logger.error(f"AudioAnalyzer: FFmpeg extraction failed: {e.stderr.decode().strip()}")
+            return dialogues
         except Exception as e:
             logger.error(f"AudioAnalyzer: Failed to load audio: {e}")
             return dialogues
+        finally:
+            if temp_wav_path.exists():
+                temp_wav_path.unlink()
 
         updated_track = []
 
@@ -75,7 +108,7 @@ class AudioAnalyzerService:
             duration = item.end_time - item.start_time
 
             # 3. 特征提取
-            analysis = AudioAnalyzerService._analyze_segment(y_slice, sr, item.content, duration)
+            analysis = AudioAnalyzerService._analyze_segment(y_slice, sr, item.content, duration, lang)
             item.audio_analysis = analysis
 
             updated_track.append(item.model_dump())
@@ -84,7 +117,7 @@ class AudioAnalyzerService:
         return updated_track
 
     @staticmethod
-    def _analyze_segment(y: np.ndarray, sr: int, text: str, duration: float) -> AudioAnalysis:
+    def _analyze_segment(y: np.ndarray, sr: int, text: str, duration: float, lang: str) -> AudioAnalysis:
         """
         [内部方法] 分析单个音频片段的声学特征。
 
@@ -93,6 +126,7 @@ class AudioAnalyzerService:
             sr: 采样率。
             text: 对白文本内容。
             duration: 音频时长。
+            lang: 语言代码。
 
         Returns:
             AudioAnalysis 对象。
@@ -120,15 +154,32 @@ class AudioAnalyzerService:
                 pitch_level = "High" if avg_pitch > 220 else "Mid"
 
         # B. 语速 (Speed)
-        # 简单计算：字符数 / 时长
-        char_count = len(text.replace(" ", ""))  # 去除空格统计
-        chars_per_sec = char_count / duration if duration > 0 else 0
-
         speed_level = "Normal"
-        if chars_per_sec > 5.0:  # 经验值：中文语速快
-            speed_level = "Fast"
-        elif chars_per_sec < 2.0:
-            speed_level = "Slow"
+        chars_per_sec = 0.0
+
+        if lang == "en":
+            # 英文：基于单词数 (WPM/WPS) 判断等级
+            # Normal: ~130-150 wpm (2.2-2.5 wps)
+            # Fast: > 160 wpm (> 2.7 wps)
+            # Slow: < 110 wpm (< 1.8 wps)
+            words = text.split()
+            wps = len(words) / duration if duration > 0 else 0
+
+            if wps > 2.7:
+                speed_level = "Fast"
+            elif wps < 1.8:
+                speed_level = "Slow"
+
+            # 存储时仍计算 CPS (去除空格)，保持数据结构统一
+            chars_per_sec = len(text.replace(" ", "")) / duration if duration > 0 else 0
+        else:
+            # 中文/默认：基于字符数 (CPS) 判断等级
+            char_count = len(text.replace(" ", ""))
+            chars_per_sec = char_count / duration if duration > 0 else 0
+            if chars_per_sec > 5.0:
+                speed_level = "Fast"
+            elif chars_per_sec < 2.0:
+                speed_level = "Slow"
 
         # C. 能量/响度 (Energy)
         rms = float(np.sqrt(np.mean(y**2)))

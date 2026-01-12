@@ -9,19 +9,20 @@ from apps.atomflow.refinery.scheduler import RefineryAtomScheduler
 from apps.atomflow.refinery.services.audio_analyzer import AudioAnalyzerService
 from apps.atomflow.refinery.services.character_refiner import CharacterRefinerService
 from apps.atomflow.refinery.services.frame_extractor import FrameExtractorService
-from apps.atomflow.refinery.services.frame_probe import FrameProbeService
-from apps.atomflow.refinery.services.hls_generator import HLSService
-from apps.atomflow.refinery.services.probe import ProbeService
-from apps.atomflow.refinery.services.scene_verification import SceneVerificationService
+from apps.atomflow.refinery.services.frame_prober import FrameProberService
+from apps.atomflow.refinery.services.global_character_refiner import GlobalCharacterRefinerService
+from apps.atomflow.refinery.services.hls_generator import HLSGeneratorService
+from apps.atomflow.refinery.services.prober import ProberService
+from apps.atomflow.refinery.services.scene_verifier import SceneVerifierService
 from apps.atomflow.refinery.services.slice_analyzer import SliceAnalyzerService
 from apps.atomflow.refinery.services.slice_regrouper import SliceRegrouperService
-from apps.atomflow.refinery.services.slicer import SlicingService
+from apps.atomflow.refinery.services.slicer import SlicerService
 from apps.atomflow.refinery.services.text_analyzer import TextAnalyzerService
 
 # 引入具体的业务 Service
-from apps.atomflow.refinery.services.transcoder import TranscodeService
+from apps.atomflow.refinery.services.transcoder import TranscoderService
 from apps.atomflow.refinery.services.uploader import TicketUploader
-from apps.atomflow.refinery.services.vector_indexer import VectorIndexService
+from apps.atomflow.refinery.services.vector_indexer import VectorIndexerService
 from apps.atomflow.refinery.services.visual_analyzer import VisualAnalyzerService
 from apps.common.cloud_client import CloudApiService
 
@@ -83,6 +84,50 @@ def refinery_atomic_task(self, pipeline_id, seq, op_slug):
         raise self.retry(exc=e)
 
 
+@shared_task(bind=True, name="apps.atomflow.refinery.tasks.execute_asset_step")
+def execute_asset_step(self, asset_id, pipeline_ids, step_config):
+    """
+    [Task] Asset 级别聚合任务执行入口 (Barrier/Reduce)。
+
+    职责：
+    1. 执行聚合逻辑 (如 Global Character Refine)。
+    2. 更新所有涉及 Pipeline 的状态为 SUCCESS。
+    3. 唤醒所有 Pipeline 继续执行 (Resume)。
+    """
+    from apps.atomflow.refinery.models import RefineryAtomPipeline
+
+    op_slug = step_config["unit_slug"]
+    seq = step_config["seq"]
+
+    # 1. 执行聚合业务逻辑
+    try:
+        if op_slug == "global_character_refine":
+            GlobalCharacterRefinerService.run(asset_id, pipeline_ids)
+        else:
+            # 扩展点：未来可能有 global_scene_summary 等
+            pass
+    except Exception as e:
+        # 如果聚合失败，所有 Pipeline 标记为 FAIL
+        # 或者只标记当前 Task 失败，等待重试
+        raise self.retry(exc=e)
+
+    # 2. 唤醒所有 Pipeline (Resume)
+    pipelines = RefineryAtomPipeline.objects.filter(id__in=pipeline_ids)
+
+    for pipeline in pipelines:
+        # 更新 Metrics 为 SUCCESS
+        metrics = pipeline.metrics or {}
+        metrics[str(seq)] = {"slug": op_slug, "status": "SUCCESS", "finished_at": time.time()}
+        pipeline.metrics = metrics
+        pipeline.save(update_fields=["metrics"])
+
+        # 驱动下一跳
+        pipe_ctx = RefineryPipelineContext(str(pipeline.id))
+        RefineryAtomScheduler.record_and_dispatch(
+            pipe_ctx=pipe_ctx, current_seq=seq, mode=pipeline.rule.mode, duration=0  # 聚合任务耗时难以分摊，暂记0
+        )
+
+
 def _dispatch_service(op_slug: str, payload: dict, target_id: str) -> dict:
     """
     [内部适配器] Service 分发与参数适配。
@@ -108,7 +153,7 @@ def _dispatch_service(op_slug: str, payload: dict, target_id: str) -> dict:
         # 确保目录存在 (Task 层的副作用，允许)
         abs_output_path.parent.mkdir(parents=True, exist_ok=True)
 
-        TranscodeService.run(source_path, abs_output_path)
+        TranscoderService.run(source_path, abs_output_path)
         return {"rel_path": payload["rel_path"]}
 
     elif op_slug == "probe":
@@ -116,17 +161,17 @@ def _dispatch_service(op_slug: str, payload: dict, target_id: str) -> dict:
         temp_wav_path = Path(payload["temp_wav_path"])
         temp_wav_path.parent.mkdir(parents=True, exist_ok=True)
 
-        tech_meta, duration, waveform = ProbeService.run(abs_proxy_path, temp_wav_path)
+        tech_meta, duration, waveform = ProberService.run(abs_proxy_path, temp_wav_path)
         return {"duration": duration, "tech_meta": tech_meta, "waveform_data": waveform}
 
-    elif op_slug == "hls":
+    elif op_slug == "generate_hls":
         abs_proxy_path = Path(payload["proxy_path"])
         abs_output_dir = Path(payload["output_dir"])
 
-        HLSService.run(abs_proxy_path, abs_output_dir)
+        HLSGeneratorService.run(abs_proxy_path, abs_output_dir)
         return {"rel_path": payload["rel_path"]}
 
-    elif op_slug == "slicing":
+    elif op_slug == "slice":
         abs_proxy_path = Path(payload["proxy_path"])
         duration = payload["duration"]
         dialogues = payload["dialogues"]
@@ -138,7 +183,7 @@ def _dispatch_service(op_slug: str, payload: dict, target_id: str) -> dict:
         max_pad = payload.get("max_pad", 0.5)
         silence_thresh = payload.get("silence_thresh", 0.02)
 
-        slices = SlicingService.run(
+        slices = SlicerService.run(
             abs_proxy_path,
             duration,
             dialogues,
@@ -162,7 +207,7 @@ def _dispatch_service(op_slug: str, payload: dict, target_id: str) -> dict:
     elif op_slug == "frame_probe":
         keyframe_map = payload["keyframe_map"]  # 接收的是 Dict[str, List[Dict]]
         media_root_path = Path(payload["media_root"])
-        updated_keyframe_map = FrameProbeService.run(keyframe_map, media_root_path)
+        updated_keyframe_map = FrameProberService.run(keyframe_map, media_root_path)
         return updated_keyframe_map  # FrameProbeService 现在直接返回更新后的 keyframe_map
 
     elif op_slug == "text_analyze":
@@ -189,7 +234,8 @@ def _dispatch_service(op_slug: str, payload: dict, target_id: str) -> dict:
     elif op_slug == "audio_analyze":
         video_path = Path(payload["video_path"])
         dialogues = payload["dialogues"]
-        updated_track = AudioAnalyzerService.run(video_path, dialogues)
+        lang = payload.get("lang", "zh")
+        updated_track = AudioAnalyzerService.run(video_path, dialogues, lang=lang)
         return {"dialogues": updated_track}
 
     elif op_slug == "character_refine":
@@ -211,7 +257,7 @@ def _dispatch_service(op_slug: str, payload: dict, target_id: str) -> dict:
         # 合并逻辑已移至 Context
         return {"updates": updates}
 
-    elif op_slug == "sync":
+    elif op_slug == "synchronize":
         cloud_svc = CloudApiService()
         asset_id = payload.get("asset_id")
         material_id = payload.get("material_id")
@@ -225,33 +271,33 @@ def _dispatch_service(op_slug: str, payload: dict, target_id: str) -> dict:
         # 回填逻辑已移至 Context
         return {"mapping": mapping}
 
-    elif op_slug == "visual_analyzer":
+    elif op_slug == "analyze_visual":
         client = CloudApiService()
         frames = payload["frames"]
         lang = payload["lang"]
         return VisualAnalyzerService.run(client, frames, lang)
 
-    elif op_slug == "slice_analyzer":
+    elif op_slug == "analyze_slice":
         client = CloudApiService()
         # SliceAnalyzer 负责 Hydration，所以需要 keyframe_map
         return SliceAnalyzerService.run(client, payload["slices"], payload["keyframe_map"], payload["lang"])
 
-    elif op_slug == "slice_regrouper":
+    elif op_slug == "regroup_slice":
         client = CloudApiService()
         slices = payload["slices"]
         lang = payload["lang"]
         return SliceRegrouperService.run(client, slices, lang)
 
-    elif op_slug == "scene_verification":
+    elif op_slug == "verify_scene":
         video_path = Path(payload["video_path"])
         scenes = payload["scenes"]
         output_dir = Path(payload["output_dir"])
-        return SceneVerificationService.run(video_path, scenes, output_dir)
+        return SceneVerifierService.run(video_path, scenes, output_dir)
 
     elif op_slug == "vector_index":
         slices = payload["slices"]
         abs_output_path = Path(payload["output_path"])
-        VectorIndexService.run(slices, abs_output_path)
+        VectorIndexerService.run(slices, abs_output_path)
         return {"rel_path": payload["rel_path"]}
 
     else:

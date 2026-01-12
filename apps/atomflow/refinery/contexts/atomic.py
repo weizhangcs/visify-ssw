@@ -4,23 +4,23 @@ from pathlib import Path
 
 from django.conf import settings
 
+from apps.atomflow.refinery.contexts.operators.analyze_slice import AnalyzeSliceContextMixin
+from apps.atomflow.refinery.contexts.operators.analyze_visual import AnalyzeVisualContextMixin
 from apps.atomflow.refinery.contexts.operators.audio_analyze import AudioAnalyzeContextMixin
 from apps.atomflow.refinery.contexts.operators.character_refine import CharacterRefineContextMixin
 from apps.atomflow.refinery.contexts.operators.frame_extract import FrameExtractContextMixin
 from apps.atomflow.refinery.contexts.operators.frame_probe import FrameProbeContextMixin
-from apps.atomflow.refinery.contexts.operators.hls import HLSContextMixin
+from apps.atomflow.refinery.contexts.operators.generate_hls import GenerateHLSContextMixin
 from apps.atomflow.refinery.contexts.operators.probe import ProbeContextMixin
-from apps.atomflow.refinery.contexts.operators.scene_verification import SceneVerificationContextMixin
-from apps.atomflow.refinery.contexts.operators.slice_analyzer import SliceAnalyzerContextMixin
-from apps.atomflow.refinery.contexts.operators.slice_regrouper import SliceRegrouperContextMixin
-from apps.atomflow.refinery.contexts.operators.slicing import SlicingContextMixin
-from apps.atomflow.refinery.contexts.operators.sync import SyncContextMixin
+from apps.atomflow.refinery.contexts.operators.regroup_slice import RegroupSliceContextMixin
+from apps.atomflow.refinery.contexts.operators.slice import SliceContextMixin
+from apps.atomflow.refinery.contexts.operators.synchronize import SynchronizeContextMixin
 from apps.atomflow.refinery.contexts.operators.text_analyze import TextAnalyzeContextMixin
 
 # 引入所有算子 Mixin
 from apps.atomflow.refinery.contexts.operators.transcode import TranscodeContextMixin
 from apps.atomflow.refinery.contexts.operators.vector_index import VectorIndexContextMixin
-from apps.atomflow.refinery.contexts.operators.visual_analyzer import VisualAnalyzerContextMixin
+from apps.atomflow.refinery.contexts.operators.verify_scene import VerifySceneContextMixin
 from apps.atomflow.refinery.models import Material, RefineryAtomPipeline
 from apps.common.atomflow.base_contexts import BaseAtomicContext
 
@@ -31,18 +31,18 @@ class RefineryAtomicContext(
     BaseAtomicContext,
     TranscodeContextMixin,
     ProbeContextMixin,
-    HLSContextMixin,
-    SlicingContextMixin,
+    GenerateHLSContextMixin,
+    SliceContextMixin,
     AudioAnalyzeContextMixin,
     FrameProbeContextMixin,
     FrameExtractContextMixin,
     TextAnalyzeContextMixin,
     CharacterRefineContextMixin,
-    SyncContextMixin,
-    VisualAnalyzerContextMixin,
-    SliceAnalyzerContextMixin,
-    SliceRegrouperContextMixin,
-    SceneVerificationContextMixin,
+    SynchronizeContextMixin,
+    AnalyzeVisualContextMixin,
+    AnalyzeSliceContextMixin,
+    RegroupSliceContextMixin,
+    VerifySceneContextMixin,
     VectorIndexContextMixin,
 ):
     """

@@ -6,7 +6,7 @@ from pathlib import Path
 logger = logging.getLogger(__name__)
 
 
-class TranscodeService:
+class TranscoderService:
     """
     [物理算子] 视频转码服务。
 

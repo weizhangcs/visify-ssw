@@ -9,6 +9,18 @@ from pydantic import BaseModel, Field
 # 对应 apps.atomflow.refinery.models.Material 中的 JSONField 存储结构
 # ==============================================================================
 
+
+class LabelValue(BaseModel):
+    """
+    [Renamed] Previous: LabelItem
+    [通用结构] 标签项 (Value + Label)。
+    用于存储枚举值的机器码和人类可读标签。
+    """
+
+    value: str
+    label: str
+
+
 # ------------------------------------------------------------------------------
 # 1.1 对白与音频 (Dialogue & Audio) -> Material.dialogues
 # ------------------------------------------------------------------------------
@@ -29,6 +41,19 @@ class AudioAnalysis(BaseModel):
     avg_pitch_hz: float = Field(default=0.0, description="平均基频 (Hz)")
     chars_per_sec: float = Field(default=0.0, description="语速 (字/秒)")
     rms_energy: float = Field(default=0.0, description="能量均方根")
+
+
+class IdentifiedCharacterItem(BaseModel):
+    """
+    [Renamed] Previous: IdentifiedCharacter
+    [角色档案] 识别出的角色信息。
+    存储在 Material.identified_characters 列表中的单元。
+    """
+
+    name: str = Field(..., description="标准角色名")
+    aliases: List[str] = Field(default_factory=list, description="在本集中出现的别名/昵称")
+    role_type: Optional[LabelValue] = Field(default=None, description="角色类型 (Value + Label)")
+    description: Optional[str] = Field(None, description="基于本集剧情推断的角色描述")
 
 
 class SubtitleItem(BaseModel):
@@ -58,8 +83,9 @@ class SubtitleItem(BaseModel):
 # ------------------------------------------------------------------------------
 
 
-class FrameData(BaseModel):
+class FrameBase(BaseModel):
     """
+    [Renamed] Previous: FrameData
     [最小单元] 物理帧数据容器。
     仅包含最基础的时间戳和路径信息。
     """
@@ -68,23 +94,14 @@ class FrameData(BaseModel):
     path: str = Field(..., description="相对路径")
 
 
-class LabelItem(BaseModel):
+class VisualAnalysis(BaseModel):
     """
-    [通用结构] 标签项 (Value + Label)。
-    用于存储枚举值的机器码和人类可读标签。
-    """
-
-    value: str
-    label: str
-
-
-class VisualAnalysisData(BaseModel):
-    """
+    [Renamed] Previous: VisualAnalysisData
     [Cloud API 响应] 视觉分析结果。
     对应 VSS Cloud Visual Analyzer 的输出结构。
     """
 
-    shot_type: Optional[LabelItem] = Field(None, description="Main shot size (Value + Label)")
+    shot_type: Optional[LabelValue] = Field(None, description="Main shot size (Value + Label)")
     environment: Optional[str] = Field(None, description="Physical environment (e.g., Indoor-Bedroom, Outdoor-Street)")
     subject: Optional[str] = None
     action: Optional[str] = None
@@ -95,8 +112,9 @@ class VisualAnalysisData(BaseModel):
         extra = "allow"
 
 
-class FrameDataInput(FrameData):
+class KeyframeItem(FrameBase):
     """
+    [Renamed] Previous: FrameDataInput
     [核心数据结构] 关键帧完整元数据。
 
     作为 Material.keyframe_map 的 Value 结构。
@@ -113,7 +131,7 @@ class FrameDataInput(FrameData):
     )
     quality_score: Optional[float] = Field(default=None, description="帧质量分数")
     filter_reason: Optional[str] = Field(default=None, description="被过滤原因：black_frame | white_frame | blurry_frame")
-    visual_analysis: Optional[VisualAnalysisData] = Field(default=None, description="云端 VLM 分析结果")
+    visual_analysis: Optional[VisualAnalysis] = Field(default=None, description="云端 VLM 分析结果")
 
 
 # ------------------------------------------------------------------------------
@@ -138,8 +156,9 @@ class SliceAnalysis(BaseModel):
     tags: List[str] = Field(default_factory=list, description="切片语义标签")
 
 
-class MultimodalSlice(BaseModel):
+class Slice(BaseModel):
     """
+    [Renamed] Previous: MultimodalSlice
     [核心容器] 多模态切片。
 
     Material.slices 的元素结构。
@@ -151,7 +170,7 @@ class MultimodalSlice(BaseModel):
     end_time: float
     type: str = Field(..., description="visual_segment | dialogue")
     text_contents: List[SubtitleItem] = Field(default_factory=list, description="无损对白数据")
-    visual_contents: List[FrameDataInput] = Field(default_factory=list, description="无损视觉分析数据")
+    visual_contents: List[KeyframeItem] = Field(default_factory=list, description="无损视觉分析数据")
     audio_contents: AudioContent = Field(default_factory=AudioContent)
     slice_analysis: Optional[SliceAnalysis] = Field(default=None, description="切片语义分析结果")
 
@@ -161,7 +180,11 @@ class MultimodalSlice(BaseModel):
 # ------------------------------------------------------------------------------
 
 
-class VideoStreamMeta(BaseModel):
+class VideoMeta(BaseModel):
+    """
+    [Renamed] Previous: VideoStreamMeta
+    """
+
     codec: Optional[str] = None
     width: Optional[int] = None
     height: Optional[int] = None
@@ -172,7 +195,7 @@ class TechMeta(BaseModel):
 
     container: Optional[str] = None
     size: int = 0
-    video: VideoStreamMeta = Field(default_factory=VideoStreamMeta)
+    video: VideoMeta = Field(default_factory=VideoMeta)
 
 
 # ------------------------------------------------------------------------------
@@ -200,7 +223,7 @@ class SceneContent(BaseModel):
 
     narrative_action: str = Field(..., description="叙事动作/核心事件")
     location: Optional[str] = Field(None, description="主要地点")
-    scene_type: Optional[LabelItem] = Field(None, description="功能类型 (Value + Label)")
+    scene_type: Optional[LabelValue] = Field(None, description="功能类型 (Value + Label)")
     visual_mood_tags: List[str] = Field(default_factory=list, description="视觉氛围标签")
     camera_logic: Optional[str] = Field(None, description="运镜/剪辑逻辑 (e.g., Static, Fast cuts)")
     character_dynamics: Optional[str] = Field(None, description="角色张力/关系")

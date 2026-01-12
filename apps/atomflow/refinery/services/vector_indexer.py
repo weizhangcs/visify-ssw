@@ -13,7 +13,7 @@ except ImportError:
 logger = logging.getLogger(__name__)
 
 
-class VectorIndexService:
+class VectorIndexerService:
     """
     [Refinery Operator] 本地向量索引构建服务。
 
@@ -120,7 +120,7 @@ class VectorIndexService:
             logger.warning(f"VectorIndex: Failed to write debug corpus: {e}")
 
         # 2. Embedding
-        model_source = VectorIndexService._get_model_path_or_name()
+        model_source = VectorIndexerService._get_model_path_or_name()
         model = SentenceTransformer(model_source)
         embeddings = model.encode(corpus, convert_to_numpy=True)
 

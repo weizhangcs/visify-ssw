@@ -6,7 +6,7 @@ from pathlib import Path
 logger = logging.getLogger(__name__)
 
 
-class HLSService:
+class HLSGeneratorService:
     """
     [物理算子] HLS 切片生成服务。
 

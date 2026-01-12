@@ -7,7 +7,7 @@ import subprocess
 from pathlib import Path
 from typing import Dict, List, Tuple
 
-from apps.atomflow.refinery.schemas import FrameDataInput, MultimodalSlice
+from apps.atomflow.refinery.schemas import KeyframeItem, Slice
 
 logger = logging.getLogger(__name__)
 
@@ -63,7 +63,7 @@ class FrameExtractorService:
                     # 失败则返回空列表，不阻断其他切片
                     # 尝试从原始数据中恢复 slice_id 以保持 map 结构完整
                     try:
-                        slice_id_str = str(MultimodalSlice(**slices[index]).slice_id)
+                        slice_id_str = str(Slice(**slices[index]).slice_id)
                         results_map[slice_id_str] = []
                     except Exception:
                         pass
@@ -98,7 +98,7 @@ class FrameExtractorService:
         Returns:
             (slice_id_str, List[FrameDataInput.model_dump()])
         """
-        slice_obj = MultimodalSlice(**slice_data)
+        slice_obj = Slice(**slice_data)
 
         start_time = slice_obj.start_time
         end_time = slice_obj.end_time
@@ -165,7 +165,7 @@ class FrameExtractorService:
                 digest = FrameExtractorService._calculate_file_hash(abs_path)
 
                 extracted_frame_inputs.append(
-                    FrameDataInput(
+                    KeyframeItem(
                         timestamp=timestamp, path=rel_path, reason=reason, slice_id=slice_obj.slice_id, digest=digest
                     ).model_dump()
                 )

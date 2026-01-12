@@ -1,4 +1,4 @@
-# 文件路径: apps/atomflow/refinery/services/probe.py
+# 文件路径: apps/atomflow/refinery/services/prober.py
 
 import json
 import logging
@@ -6,12 +6,12 @@ import subprocess
 from pathlib import Path
 from typing import Dict, List, Tuple
 
-from apps.atomflow.refinery.schemas import TechMeta, VideoStreamMeta
+from apps.atomflow.refinery.schemas import TechMeta, VideoMeta
 
 logger = logging.getLogger(__name__)
 
 
-class ProbeService:
+class ProberService:
     """
     [物理算子] 媒体文件探测服务。
 
@@ -36,10 +36,10 @@ class ProbeService:
             - waveform_list (List[float]): 归一化的波形数据列表。
         """
         # 1. 探测 Proxy 的物理时长和技术参数
-        tech_meta, duration = ProbeService._probe_file(proxy_path)
+        tech_meta, duration = ProberService._probe_file(proxy_path)
 
         # 2. 针对 Proxy 计算声纹，使用 Context 提供的临时路径
-        waveform_list = ProbeService._generate_peaks_in_memory(proxy_path, temp_wav_path)
+        waveform_list = ProberService._generate_peaks_in_memory(proxy_path, temp_wav_path)
 
         return tech_meta, duration, waveform_list
 
@@ -69,7 +69,7 @@ class ProbeService:
             tech_meta = TechMeta(
                 container=data.get("format", {}).get("format_name"),
                 size=int(data.get("format", {}).get("size", 0)),
-                video=VideoStreamMeta(
+                video=VideoMeta(
                     codec=video_stream_data.get("codec_name"),
                     width=video_stream_data.get("width"),
                     height=video_stream_data.get("height"),

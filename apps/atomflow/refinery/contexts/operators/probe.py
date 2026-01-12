@@ -10,6 +10,10 @@ class ProbeContextMixin:
     Provides methods to generate payloads for and handle results from the ProbeService.
     """
 
+    @property
+    def media_root(self) -> Path:
+        raise NotImplementedError
+
     def _payload_probe(self, target):
         """
         Generate payload for the ProbeService.

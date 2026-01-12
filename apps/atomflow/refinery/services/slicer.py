@@ -5,12 +5,12 @@ import subprocess
 from pathlib import Path
 from typing import Dict, List
 
-from apps.atomflow.refinery.schemas import MultimodalSlice, SubtitleItem
+from apps.atomflow.refinery.schemas import Slice, SubtitleItem
 
 logger = logging.getLogger(__name__)
 
 
-class SlicingService:
+class SlicerService:
     """
     [物理算子] 视觉切片服务。
 
@@ -49,18 +49,18 @@ class SlicingService:
             多模态切片字典列表 (List[MultimodalSlice.model_dump()])。
         """
         # 1. 物理执行：镜头变更探测 (基于 FFmpeg)
-        scene_changes = SlicingService._detect_scene_changes(video_path, threshold=scene_threshold)
+        scene_changes = SlicerService._detect_scene_changes(video_path, threshold=scene_threshold)
 
         # 2. 逻辑执行：对白分组 (合并紧凑对话，返回的 content 仅用于时间边界确定)
-        grouped_dialogues = SlicingService._group_dialogues(dialogues, gap_threshold=dialogue_gap)
+        grouped_dialogues = SlicerService._group_dialogues(dialogues, gap_threshold=dialogue_gap)
 
         # 3. 逻辑执行：基于声纹的动态 Padding (呼吸感)
-        padded_dialogues = SlicingService._apply_waveform_padding(
+        padded_dialogues = SlicerService._apply_waveform_padding(
             grouped_dialogues, waveform_data, video_duration, max_pad=max_pad, silence_thresh=silence_thresh
         )
 
         # 4. [核心重构] 构建多模态切片容器
-        multimodal_slices = SlicingService._build_multimodal_slices(
+        multimodal_slices = SlicerService._build_multimodal_slices(
             video_duration=video_duration,
             scene_changes=scene_changes,
             padded_dialogues=padded_dialogues,
@@ -248,7 +248,7 @@ class SlicingService:
         # --- 步骤 2: 创建容器骨架 (Skeleton Creation) ---
         multimodal_slices = []
         for i, seg in enumerate(temporal_segments):
-            slice_obj = MultimodalSlice(
+            slice_obj = Slice(
                 slice_id=i + 1,
                 start_time=round(seg["start"], 3),
                 end_time=round(seg["end"], 3),

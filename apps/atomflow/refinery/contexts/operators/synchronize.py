@@ -1,10 +1,11 @@
 import copy
+from pathlib import Path
 from typing import Dict
 
-from apps.atomflow.refinery.schemas import FrameDataInput
+from apps.atomflow.refinery.schemas import KeyframeItem
 
 
-class SyncContextMixin:
+class SynchronizeContextMixin:
     """
     Context Mixin for synchronizing local files to cloud storage.
 
@@ -12,7 +13,11 @@ class SyncContextMixin:
     Material's keyframe_map with cloud URLs after successful synchronization.
     """
 
-    def _payload_sync(self, target):
+    @property
+    def media_root(self) -> Path:
+        raise NotImplementedError
+
+    def _payload_synchronize(self, target):
         """
         Generate payload for the SyncService (TicketUploader).
 
@@ -60,7 +65,7 @@ class SyncContextMixin:
 
         return {"files_to_upload": files_to_upload, "asset_id": asset_id, "material_id": str(target.id)}
 
-    def _handle_sync(self, target, result):
+    def _handle_synchronize(self, target, result):
         """
         Handle the result from the SyncService.
 
@@ -105,12 +110,12 @@ class SyncContextMixin:
 
         # Ensure we write back valid FrameDataInput objects
         processed_map = {
-            slice_id: [FrameDataInput(**frame_data).model_dump() for frame_data in frames]
+            slice_id: [KeyframeItem(**frame_data).model_dump() for frame_data in frames]
             for slice_id, frames in updated_keyframe_map.items()
         }
         target.keyframe_map = processed_map
 
-    def _check_sync_ready(self, target):
+    def _check_synchronize_ready(self, target):
         """
         Check if the Sync task is ready to run.
 
@@ -122,7 +127,7 @@ class SyncContextMixin:
         """
         return bool(target.keyframe_map) and any(bool(v) for v in target.keyframe_map.values())
 
-    def _check_sync_done(self, target):
+    def _check_synchronize_done(self, target):
         """
         Check if the Sync task has already been completed.
 

@@ -5,14 +5,14 @@ from apps.atomflow.refinery.schemas import Scene, SceneContent
 logger = logging.getLogger(__name__)
 
 
-class SliceRegrouperContextMixin:
+class RegroupSliceContextMixin:
     """
     Context Mixin for scene clustering and summarization.
 
     Provides methods to generate payloads for and handle results from the SliceRegrouperService.
     """
 
-    def _payload_slice_regrouper(self, target):
+    def _payload_regroup_slice(self, target):
         """
         Generate payload for the SliceRegrouperService.
 
@@ -32,7 +32,7 @@ class SliceRegrouperContextMixin:
             "lang": lang,
         }
 
-    def _handle_slice_regrouper(self, target, result):
+    def _handle_regroup_slice(self, target, result):
         """
         Handle the result from the SliceRegrouperService.
 
@@ -63,7 +63,7 @@ class SliceRegrouperContextMixin:
 
         target.scenes = validated_scenes
 
-    def _check_slice_regrouper_ready(self, target):
+    def _check_regroup_slice_ready(self, target):
         """
         Check if the Slice Regrouper task is ready to run.
 
@@ -78,7 +78,7 @@ class SliceRegrouperContextMixin:
         # 检查至少有一个切片包含视觉分析数据 (表示 visual_analyzer 已完成 hydration)
         return any(s.get("visual_contents") for s in target.slices)
 
-    def _check_slice_regrouper_done(self, target):
+    def _check_regroup_slice_done(self, target):
         """
         Check if the Slice Regrouper task has already been completed.
 
