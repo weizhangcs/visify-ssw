@@ -31,8 +31,13 @@ def run_flow_test():
         {"seq": 3, "unit_slug": "generate_hls", "name": "HLS切片", "obligation": "REQUIRED", "dependence": [1]},
         {"seq": 4, "unit_slug": "text_analyze", "name": "文本分析", "obligation": "REQUIRED", "dependence": [3]},
         {"seq": 5, "unit_slug": "audio_analyze", "name": "声纹分析", "obligation": "REQUIRED", "dependence": [4]},
-        # noqa: E501  {"seq": 6, "unit_slug": "global_character_refine", "name": "全剧角色统筹", "obligation": "REQUIRED","dependence": [5]},
-        {"seq": 6, "unit_slug": "character_refine", "name": "角色精修", "obligation": "REQUIRED", "dependence": [5]},
+        {
+            "seq": 6,
+            "unit_slug": "global_character_refine",
+            "name": "全剧角色统筹",
+            "obligation": "REQUIRED",
+            "dependence": [5],
+        },  # noqa: E501
         {"seq": 7, "unit_slug": "slice", "name": "视觉切片", "obligation": "REQUIRED", "dependence": [6]},
         {"seq": 8, "unit_slug": "frame_extract", "name": "关键帧提取", "obligation": "REQUIRED", "dependence": [7]},
         {"seq": 9, "unit_slug": "frame_probe", "name": "关键帧检测", "obligation": "REQUIRED", "dependence": [8]},
@@ -40,7 +45,6 @@ def run_flow_test():
         {"seq": 11, "unit_slug": "analyze_visual", "name": "视觉识别", "obligation": "REQUIRED", "dependence": [10]},
         {"seq": 12, "unit_slug": "analyze_slice", "name": "切片分析", "obligation": "REQUIRED", "dependence": [11]},
         {"seq": 13, "unit_slug": "regroup_slice", "name": "切片聚类", "obligation": "REQUIRED", "dependence": [12]},
-        {"seq": 14, "unit_slug": "vector_index", "name": "向量索引", "obligation": "REQUIRED", "dependence": [12]},
     ]
 
     rule, _ = RefineryAtomRule.objects.update_or_create(

@@ -7,6 +7,7 @@ from django.utils.html import format_html
 from unfold.admin import ModelAdmin
 from unfold.contrib.forms.widgets import WysiwygWidget
 from unfold.decorators import display
+from unfold.widgets import UnfoldAdminTextareaWidget
 
 from . import views
 from .models import Asset, Media
@@ -16,11 +17,13 @@ from .models import Asset, Media
 class AssetAdmin(ModelAdmin):
     formfield_overrides = {
         models.TextField: {"widget": WysiwygWidget},
+        models.JSONField: {"widget": UnfoldAdminTextareaWidget(attrs={"rows": 3})},
     }
 
     list_display = (
         "title",
         "asset_type",
+        "orientation",
         "language",
         "copyright_status",
         "upload_status",
@@ -28,12 +31,28 @@ class AssetAdmin(ModelAdmin):
         "modified",
         "batch_upload_action",
     )
-    list_filter = ("asset_type", "language", "copyright_status", "upload_status")
+    list_filter = ("asset_type", "orientation", "language", "copyright_status", "upload_status")
     search_fields = ("title",)
     inlines = []
     actions = []
     # [核心修复] 增加分页
     list_per_page = 20
+
+    fieldsets = (
+        (
+            None,
+            {
+                "fields": (
+                    "title",
+                    "description",
+                    ("asset_type", "content_genre"),
+                    ("language", "orientation"),
+                    "known_characters",
+                    ("copyright_status", "upload_status"),
+                ),
+            },
+        ),
+    )
 
     @display(header=True, description="文件上传状态与操作", label="文件上传")
     def batch_upload_action(self, obj):

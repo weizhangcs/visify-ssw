@@ -137,20 +137,28 @@ class Command(BaseCommand):
         rules_json = [
             {"seq": 1, "unit_slug": "transcode", "name": "原子转码", "obligation": "REQUIRED"},
             {"seq": 2, "unit_slug": "probe", "name": "原子探测", "obligation": "REQUIRED", "dependence": [1]},
-            {"seq": 3, "unit_slug": "hls", "name": "HLS切片", "obligation": "REQUIRED", "dependence": [1]},
+            {"seq": 3, "unit_slug": "generate_hls", "name": "HLS切片", "obligation": "REQUIRED", "dependence": [1]},
             {"seq": 4, "unit_slug": "text_analyze", "name": "文本分析", "obligation": "REQUIRED", "dependence": [3]},
             {"seq": 5, "unit_slug": "audio_analyze", "name": "声纹分析", "obligation": "REQUIRED", "dependence": [4]},
-            {"seq": 6, "unit_slug": "character_refine", "name": "角色精修", "obligation": "REQUIRED", "dependence": [5]},
-            {"seq": 7, "unit_slug": "slicing", "name": "视觉切片", "obligation": "REQUIRED", "dependence": [6]},
+            {
+                "seq": 6,
+                "unit_slug": "global_character_refine",
+                "name": "全剧角色统筹",
+                "obligation": "REQUIRED",
+                "dependence": [5],
+                "scope": "ASSET",
+            },
+            {"seq": 7, "unit_slug": "slice", "name": "视觉切片", "obligation": "REQUIRED", "dependence": [6]},
             {"seq": 8, "unit_slug": "frame_extract", "name": "关键帧提取", "obligation": "REQUIRED", "dependence": [7]},
             {"seq": 9, "unit_slug": "frame_probe", "name": "关键帧检测", "obligation": "REQUIRED", "dependence": [8]},
-            {"seq": 10, "unit_slug": "sync", "name": "云端同步", "obligation": "REQUIRED", "dependence": [9]},
-            {"seq": 11, "unit_slug": "visual_analyzer", "name": "视觉识别", "obligation": "REQUIRED", "dependence": [10]},
-            {"seq": 12, "unit_slug": "slice_regrouper", "name": "场景聚类", "obligation": "REQUIRED", "dependence": [11]},
+            {"seq": 10, "unit_slug": "synchronize", "name": "云端同步", "obligation": "REQUIRED", "dependence": [9]},
+            {"seq": 11, "unit_slug": "analyze_visual", "name": "视觉识别", "obligation": "REQUIRED", "dependence": [10]},
+            {"seq": 12, "unit_slug": "analyze_slice", "name": "切片分析", "obligation": "REQUIRED", "dependence": [11]},
+            {"seq": 13, "unit_slug": "regroup_slice", "name": "切片聚类", "obligation": "REQUIRED", "dependence": [12]},
         ]
 
-        slug = "default_full_refinery_v1"
-        name = "全量媒资精炼编排"
+        slug = "default_full_refinery"
+        name = "自动化媒资推理"
 
         try:
             rule, created = RefineryAtomRule.objects.update_or_create(

@@ -122,7 +122,7 @@ class VectorIndexerService:
         # 2. Embedding
         model_source = VectorIndexerService._get_model_path_or_name()
         model = SentenceTransformer(model_source)
-        embeddings = model.encode(corpus, convert_to_numpy=True)
+        embeddings = model.encode(corpus, convert_to_numpy=True, show_progress_bar=False)
 
         # 归一化以支持余弦相似度 (FAISS Inner Product)
         faiss.normalize_L2(embeddings)

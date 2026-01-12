@@ -41,6 +41,12 @@ class ContentGenre(models.TextChoices):
     OTHER = "other", "Other"
 
 
+class VideoOrientation(models.TextChoices):
+    LANDSCAPE = "landscape", "横屏 (Landscape)"
+    PORTRAIT = "portrait", "竖屏 (Portrait)"
+    UNKNOWN = "unknown", "未知 (Unknown)"
+
+
 # --- 定义动态路径函数 ---
 def get_media_upload_path(instance, filename):
     return f"source_files/{instance.asset.id}/media/{filename}"
@@ -64,6 +70,13 @@ class Asset(TimeStampedModel):
 
     content_genre = models.CharField(
         _("Genre"), max_length=50, choices=ContentGenre.choices, default=ContentGenre.OTHER
+    )
+
+    orientation = models.CharField(
+        max_length=20,
+        choices=VideoOrientation.choices,
+        default=VideoOrientation.UNKNOWN,
+        verbose_name="画幅方向",
     )
 
     # [新增] 角色列表：存储 JSON 格式 List[str]，例如 ["Iron Man", "Captain America"]
