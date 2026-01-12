@@ -3,7 +3,7 @@ import logging
 from typing import List
 
 from apps.atomflow.refinery.models import Material
-from apps.atomflow.refinery.schemas import IdentifiedCharacterItem, LabelValue
+from apps.atomflow.refinery.schemas import IdentifiedCharacterItem, RoleType, RoleTypeLabel
 from apps.atomflow.refinery.services.character_refiner import CharacterRefinerService
 from apps.common.cloud_client import CloudApiService
 
@@ -178,7 +178,11 @@ class GlobalCharacterRefinerService:
                 # 尝试从 known_characters 匹配更多信息
                 # known_char = next((k for k in known_characters if k['name'] == name), None)
 
-                char_item = IdentifiedCharacterItem(name=name, role_type=LabelValue(value="unknown", label="未知"))
+                char_item = IdentifiedCharacterItem(
+                    name=name,
+                    role_type=RoleTypeLabel(value=RoleType.UNKNOWN, label="未知"),  # 使用枚举成员
+                    description=None,
+                )
                 char_items.append(char_item.model_dump())
 
             mat.identified_characters = char_items

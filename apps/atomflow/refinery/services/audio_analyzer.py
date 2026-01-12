@@ -14,7 +14,14 @@ try:
 except ImportError:
     librosa = None
 
-from apps.atomflow.refinery.schemas import AudioAnalysis, SubtitleItem  # noqa: E402
+from apps.atomflow.refinery.schemas import (  # noqa: E402
+    AudioAnalysis,
+    Gender,
+    PitchLevel,
+    SpeedLevel,
+    SubtitleItem,
+    VolumeLevel,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -138,8 +145,8 @@ class AudioAnalyzerService:
         valid_f0 = f0[~np.isnan(f0)]
 
         avg_pitch = 0.0
-        gender = "Unknown"
-        pitch_level = "Mid"
+        gender = Gender.UNKNOWN
+        pitch_level = PitchLevel.MID
 
         if len(valid_f0) > 0:
             avg_pitch = float(np.mean(valid_f0))
@@ -147,14 +154,14 @@ class AudioAnalyzerService:
             # 简单启发式规则 (Heuristic)
             # 男性通常 < 165Hz, 女性通常 > 165Hz
             if avg_pitch < 165:
-                gender = "Male"
-                pitch_level = "Low" if avg_pitch < 100 else "Mid"
+                gender = Gender.MALE
+                pitch_level = PitchLevel.LOW if avg_pitch < 100 else PitchLevel.MID
             else:
-                gender = "Female"
-                pitch_level = "High" if avg_pitch > 220 else "Mid"
+                gender = Gender.FEMALE
+                pitch_level = PitchLevel.HIGH if avg_pitch > 220 else PitchLevel.MID
 
         # B. 语速 (Speed)
-        speed_level = "Normal"
+        speed_level = SpeedLevel.NORMAL
         chars_per_sec = 0.0
 
         if lang == "en":
@@ -166,9 +173,9 @@ class AudioAnalyzerService:
             wps = len(words) / duration if duration > 0 else 0
 
             if wps > 2.7:
-                speed_level = "Fast"
+                speed_level = SpeedLevel.FAST
             elif wps < 1.8:
-                speed_level = "Slow"
+                speed_level = SpeedLevel.SLOW
 
             # 存储时仍计算 CPS (去除空格)，保持数据结构统一
             chars_per_sec = len(text.replace(" ", "")) / duration if duration > 0 else 0
@@ -177,17 +184,17 @@ class AudioAnalyzerService:
             char_count = len(text.replace(" ", ""))
             chars_per_sec = char_count / duration if duration > 0 else 0
             if chars_per_sec > 5.0:
-                speed_level = "Fast"
+                speed_level = SpeedLevel.FAST
             elif chars_per_sec < 2.0:
-                speed_level = "Slow"
+                speed_level = SpeedLevel.SLOW
 
         # C. 能量/响度 (Energy)
         rms = float(np.sqrt(np.mean(y**2)))
-        volume_level = "Normal"
+        volume_level = VolumeLevel.NORMAL
         if rms > 0.1:  # 经验值，需根据实际音频归一化情况调整
-            volume_level = "Loud"
+            volume_level = VolumeLevel.LOUD
         elif rms < 0.02:
-            volume_level = "Quiet"
+            volume_level = VolumeLevel.QUIET
 
         return AudioAnalysis(
             gender=gender,

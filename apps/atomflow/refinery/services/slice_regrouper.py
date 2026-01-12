@@ -5,6 +5,7 @@ import tempfile
 from pathlib import Path
 from typing import Any, Dict, List
 
+from apps.atomflow.refinery.schemas import SceneType
 from apps.common.cloud_client import CloudApiService
 from apps.common.schemas.refinery.slice_regrouper import MultimodalSlice as ExecMultimodalSlice
 from apps.common.schemas.refinery.slice_regrouper import SliceRegrouperPayload
@@ -51,7 +52,13 @@ class SliceRegrouperService:
         exec_slices = []
         try:
             for s in slices:
-                exec_slices.append(ExecMultimodalSlice(**s))
+                # [Adapter] Flatten SliceTypeLabel to string for Cloud API
+                # Local 'type' is {'value': '...', 'label': '...'}, Cloud expects 'value' string
+                s_copy = s.copy()
+                if isinstance(s_copy.get("type"), dict):
+                    s_copy["type"] = s_copy["type"].get("value")
+
+                exec_slices.append(ExecMultimodalSlice(**s_copy))
         except Exception as e:
             raise ValueError(f"SliceRegrouper: Data validation failed - {e}")
 
@@ -99,8 +106,30 @@ class SliceRegrouperService:
                 raise RuntimeError(f"SliceRegrouper: Failed to download result file from {download_url}")
             try:
                 data = json.loads(content_bytes.decode("utf-8"))
+
+                # [Adapter] Hydrate SceneType string to SceneTypeLabel
+                scenes = data.get("scenes", [])
+                for scene in scenes:
+                    content = scene.get("content", {})
+                    if "scene_type" in content:
+                        raw_type = content["scene_type"]
+                        if isinstance(raw_type, str):
+                            content["scene_type"] = SliceRegrouperService._get_scene_type_label(raw_type, lang)
                 return data
             except Exception as e:
                 raise RuntimeError(f"SliceRegrouper: Failed to parse result JSON: {e}")
 
         raise RuntimeError("SliceRegrouper: Task completed but no download_url provided.")
+
+    @staticmethod
+    def _get_scene_type_label(value: str, lang: str = "zh") -> Dict[str, str]:
+        """Helper to construct SceneTypeLabel with i18n."""
+        labels = {
+            SceneType.DIALOGUE: {"zh": "对话/文戏", "en": "Dialogue"},
+            SceneType.ACTION: {"zh": "动作/冲突", "en": "Action"},
+            SceneType.MONTAGE: {"zh": "蒙太奇", "en": "Montage"},
+            SceneType.ESTABLISHING: {"zh": "建立/空镜", "en": "Establishing"},
+            SceneType.EMOTIONAL: {"zh": "情感/特写", "en": "Emotional"},
+        }
+        label_text = labels.get(value, {}).get(lang, "Unknown")
+        return {"value": value, "label": label_text}

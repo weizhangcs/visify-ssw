@@ -46,7 +46,7 @@ def run_asset_flow_test():
         {"seq": 11, "unit_slug": "analyze_visual", "name": "视觉识别", "obligation": "REQUIRED", "dependence": [10]},
         {"seq": 12, "unit_slug": "analyze_slice", "name": "切片分析", "obligation": "REQUIRED", "dependence": [11]},
         {"seq": 13, "unit_slug": "regroup_slice", "name": "切片聚类", "obligation": "REQUIRED", "dependence": [12]},
-        {"seq": 14, "unit_slug": "vector_index", "name": "向量索引", "obligation": "REQUIRED", "dependence": [12]},
+        {"seq": 14, "unit_slug": "vector_index", "name": "向量索引", "obligation": "REQUIRED", "dependence": [13]},
     ]
 
     rule, _ = RefineryAtomRule.objects.update_or_create(

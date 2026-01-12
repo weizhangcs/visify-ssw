@@ -176,6 +176,7 @@ def _dispatch_service(op_slug: str, payload: dict, target_id: str) -> dict:
         duration = payload["duration"]
         dialogues = payload["dialogues"]
         waveform_data = payload.get("waveform_data", [])
+        lang = payload.get("lang", "zh")
 
         # Extract optional configs from payload if they exist
         scene_threshold = payload.get("scene_threshold", 0.3)
@@ -192,6 +193,7 @@ def _dispatch_service(op_slug: str, payload: dict, target_id: str) -> dict:
             dialogue_gap=dialogue_gap,
             max_pad=max_pad,
             silence_thresh=silence_thresh,
+            lang=lang,
         )
         return {"slices": slices}
 

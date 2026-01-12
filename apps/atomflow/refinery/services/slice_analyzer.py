@@ -48,6 +48,10 @@ class SliceAnalyzerService:
                 if keyframe_map and slice_id in keyframe_map:
                     s_copy["visual_contents"] = keyframe_map[slice_id]
 
+                # [Adapter] Flatten SliceTypeLabel to string for Cloud API
+                if isinstance(s_copy.get("type"), dict):
+                    s_copy["type"] = s_copy["type"].get("value")
+
                 exec_slices.append(ExecMultimodalSlice(**s_copy))
         except Exception as e:
             raise ValueError(f"SliceAnalyzer: Data hydration/validation failed - {e}")

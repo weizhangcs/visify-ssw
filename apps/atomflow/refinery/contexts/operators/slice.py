@@ -27,11 +27,18 @@ class SliceContextMixin:
         """
         proxy_rel = target.proxy_video
         abs_proxy_path = self.media_root / proxy_rel
+
+        asset = getattr(target.media, "asset", None)
+        lang = "zh"
+        if asset and asset.language:
+            lang = asset.language.split("-")[0]
+
         return {
             "proxy_path": str(abs_proxy_path),
             "duration": target.duration,
             "dialogues": target.dialogues,
             "waveform_data": target.waveform_data,
+            "lang": lang,
         }
 
     def _handle_slice(self, target, result):

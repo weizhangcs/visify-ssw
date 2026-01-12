@@ -5,7 +5,7 @@ import subprocess
 from pathlib import Path
 from typing import Dict, List
 
-from apps.atomflow.refinery.schemas import Slice, SubtitleItem
+from apps.atomflow.refinery.schemas import Slice, SliceType, SubtitleItem
 
 logger = logging.getLogger(__name__)
 
@@ -31,6 +31,7 @@ class SlicerService:
         dialogue_gap: float = 1.0,
         max_pad: float = 0.5,
         silence_thresh: float = 0.02,
+        lang: str = "zh",
     ) -> List[Dict]:
         """
         执行切片逻辑。
@@ -44,6 +45,7 @@ class SlicerService:
             dialogue_gap: 对白合并的最大间隔 (秒)。
             max_pad: 切片前后填充的最大时长 (秒)。
             silence_thresh: 静音检测阈值。
+            lang: 语言代码 (zh/en)。
 
         Returns:
             多模态切片字典列表 (List[MultimodalSlice.model_dump()])。
@@ -65,6 +67,7 @@ class SlicerService:
             scene_changes=scene_changes,
             padded_dialogues=padded_dialogues,
             original_dialogues=dialogues,  # 传入原始对白用于无损填充
+            lang=lang,
         )
 
         return multimodal_slices
@@ -211,6 +214,7 @@ class SlicerService:
         scene_changes: List[float],
         padded_dialogues: List[Dict],
         original_dialogues: List[Dict],
+        lang: str = "zh",
     ) -> List[Dict]:
         """
         [内部方法] 构建多模态切片容器的三步流程。
@@ -248,11 +252,14 @@ class SlicerService:
         # --- 步骤 2: 创建容器骨架 (Skeleton Creation) ---
         multimodal_slices = []
         for i, seg in enumerate(temporal_segments):
+            # [适配] 构造 SliceTypeLabel
+            type_slug = seg["type"]
+            type_obj = SlicerService._get_slice_type_label(type_slug, lang)
             slice_obj = Slice(
                 slice_id=i + 1,
                 start_time=round(seg["start"], 3),
                 end_time=round(seg["end"], 3),
-                type=seg["type"],
+                type=type_obj,
             )
             multimodal_slices.append(slice_obj)
 
@@ -261,7 +268,7 @@ class SlicerService:
         subtitle_map = {item["index"]: item for item in original_dialogues}  # noqa: F841
 
         for m_slice in multimodal_slices:
-            if m_slice.type == "dialogue":
+            if m_slice.type.value == SliceType.DIALOGUE:
                 # 筛选出时间戳落在该切片内的所有原始字幕行
                 contained_subtitles = []
                 for sub_item_data in original_dialogues:
@@ -274,3 +281,23 @@ class SlicerService:
 
         # 返回序列化后的字典列表
         return [s.model_dump() for s in multimodal_slices]
+
+    @staticmethod
+    def _get_slice_type_label(type_slug: str, lang: str = "zh") -> Dict[str, str]:
+        """
+        [内部方法] 获取切片类型的 LabelValue 结构。
+        支持 i18n 处理。
+        """
+        labels = {
+            SliceType.VISUAL_SEGMENT: {"zh": "纯画面", "en": "Visual Segment"},
+            SliceType.DIALOGUE: {"zh": "对白", "en": "Dialogue"},
+        }
+
+        if type_slug == SliceType.VISUAL_SEGMENT:
+            return {
+                "value": SliceType.VISUAL_SEGMENT,
+                "label": labels[SliceType.VISUAL_SEGMENT].get(lang, "Visual Segment"),
+            }
+        elif type_slug == SliceType.DIALOGUE:
+            return {"value": SliceType.DIALOGUE, "label": labels[SliceType.DIALOGUE].get(lang, "Dialogue")}
+        return {"value": "unknown", "label": "未知"}
