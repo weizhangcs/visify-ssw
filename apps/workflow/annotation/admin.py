@@ -47,13 +47,13 @@ class AnnotationProjectAdmin(ModelAdmin):
             None,
             {
                 "classes": ("wide",),
-                "fields": ("name", "asset", "source_encoding_profile", "description"),
+                "fields": ("name", "asset", "description"),
             },
         ),
     )
 
     # 详情页配置 (虽然主要被 React 接管，但保持定义是个好习惯)
-    fieldsets = (("基本信息", {"fields": ("name", "status", "source_encoding_profile", "description")}),)
+    fieldsets = (("基本信息", {"fields": ("name", "status", "description")}),)
 
     # =========================================================================
     # [核心修复] 覆盖 save_model，在项目创建后自动初始化 Job

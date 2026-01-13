@@ -37,7 +37,7 @@ export const transformToTracks = (annotationData) => {
 
                 // [关键修正] 统一 Dialogues 的显示文本字段
                 // 确保 Timeline 轨道上能看到文字
-                let displayLabel = flatData.label || flatData.narrative_action || `Clip ${index + 1}`;
+                let displayLabel = flatData.label || flatData.narrative_action || flatData.text || `Clip ${index + 1}`;
 
                 return {
                     // [关键修正] 确保 ID 绝对唯一，防止 React 渲染失效

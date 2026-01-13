@@ -30,8 +30,3 @@ class AnnotationProjectForm(forms.ModelForm):
             self.fields["asset"].required = True
             # 你可以在这里过滤 Asset，比如只显示未关联项目的 Asset，视业务需求而定
             # self.fields["asset"].queryset = ...
-
-        # 确保创建时必须选择编码配置
-        if "source_encoding_profile" in self.fields:
-            # [Legacy Fix] 不再强制要求
-            self.fields["source_encoding_profile"].required = False

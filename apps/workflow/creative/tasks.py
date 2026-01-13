@@ -13,7 +13,6 @@ from apps.workflow.common.tasks import poll_cloud_task
 from .jobs import CreativeJob
 from .models import CreativeProject
 from .services.actions import CreativeTaskAction
-from .services.narration_generator import NarrationGeneratorService
 from .services.payloads import PayloadBuilder
 from .services.synthesis_service import SynthesisService
 
@@ -31,37 +30,31 @@ def start_narration_task(project_id: str, config: dict = None, **kwargs):
     job = None
     try:
         action = CreativeTaskAction(project_id)
-
-        # [Local RAG 改动] 不再强制上传 Blueprint 到云端
-        # blueprint_path = action.ensure_blueprint_uploaded()
+        blueprint_path = action.ensure_blueprint_uploaded()
 
         job = action.create_job(CreativeJob.TYPE.GENERATE_NARRATION, config)
         action.update_project_status(CreativeProject.Status.NARRATION_RUNNING)
 
-        # === [NEW] 本地生成逻辑 ===
-        logger.info("[NarrationTask] 启动本地生成服务 (Local RAG)...")
+        asset_name, asset_id = action.get_asset_info()
+        payload = PayloadBuilder.build_narration_payload(
+            asset_name=asset_name, asset_id=asset_id, blueprint_path=blueprint_path, raw_config=config
+        )
 
-        # 1. 初始化本地服务
-        service = NarrationGeneratorService(action.project)
+        logger.info(f"[NarrationTask] Payload: \n{json.dumps(payload, ensure_ascii=False)}")
 
-        # 2. 同步执行生成 (LLM 调用通常较快，或者也可以做成异步)
-        # 如果 LLM 很慢，这里应该扔给另一个专门处理 LLM 的 Queue，但为了架构简单，先同步运行
-        result_json = service.execute(config)
+        success, task_data = action.cloud_service.create_task("GENERATE_NARRATION", payload)
+        if not success:
+            raise Exception(task_data.get("message"))
 
-        # 3. 保存结果 (模拟 Cloud Callback 的行为)
-        # 直接保存到文件
-        file_content = json.dumps(result_json, indent=2, ensure_ascii=False)
-        file_name = f"narration_script_local_{job.id}.json"
-
-        action.project.narration_script_file.save(file_name, ContentFile(file_content.encode("utf-8")), save=False)
-        action.project.save()
-
-        # 4. 完成任务
-        job.complete()
+        job.cloud_task_id = task_data["id"]
         job.save()
 
-        # 5. 触发后续流程 (复用 finalize 的逻辑，或者直接在这里触发)
-        finalize_narration_task(job_id=str(job.id), cloud_task_data={})  # 传空字典，因为本地模式不需要 cloud data
+        poll_cloud_task.delay(
+            job_id=job.id,
+            cloud_task_id=task_data["id"],
+            on_complete_task_name="apps.workflow.creative.tasks.finalize_narration_task",
+            on_complete_kwargs={},
+        )
 
     except Exception as e:
         logger.error(f"[NarrationTask] Failed: {e}", exc_info=True)
@@ -81,16 +74,12 @@ def finalize_narration_task(job_id: str, cloud_task_data: dict, **kwargs):
         job = CreativeJob.objects.get(id=job_id)
         action = CreativeTaskAction(str(job.project.id))
 
-        # [Local RAG 改动]
-        # 如果是本地生成的，文件已经在 start_narration_task 里保存了。
-        # 只有当 cloud_task_data 包含 download_url 时才执行下载逻辑 (兼容旧模式)
-        if cloud_task_data.get("download_url"):
-            action.handle_callback_download(
-                job_id=job_id,
-                cloud_data=cloud_task_data,
-                target_file_field_name="narration_script_file",
-                filename_prefix="narration_script",
-            )
+        action.handle_callback_download(
+            job_id=job_id,
+            cloud_data=cloud_task_data,
+            target_file_field_name="narration_script_file",
+            filename_prefix="narration_script",
+        )
 
         action.update_project_status(CreativeProject.Status.NARRATION_COMPLETED)
 
