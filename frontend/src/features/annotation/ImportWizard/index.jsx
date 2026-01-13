@@ -125,13 +125,13 @@ const ImportWizard = ({ context }) => {
 
                         {/* 模式 A: 新建 -> 跳转原生 */}
                         {mode === 'create' && (
-                            <div className="text-center">
+                            <div className="flex flex-col items-center gap-10">
                                 <Alert
                                     message="即将跳转至基础配置页面"
-                                    description="系统将引导您填写项目名称、选择资产和编码配置。"
+                                    description="系统将引导您填写项目名称并选择关联资产。"
                                     type="info"
                                     showIcon
-                                    className="mb-6 text-left max-w-md mx-auto"
+                                    className="text-left max-w-md w-full"
                                 />
                                 <Button
                                     type="primary"

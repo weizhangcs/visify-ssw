@@ -4,12 +4,12 @@
 
 services:
   web:
-    image: crpi-34v4qt829vtet2cy.cn-hangzhou.personal.cr.aliyuncs.com/vss_edge/workbench:v1.3.0-alpha.temp # Define the tag for the built image
+    image: crpi-34v4qt829vtet2cy.cn-hangzhou.personal.cr.aliyuncs.com/vss_edge/workbench:v1.4.0-alpha # Define the tag for the built image
     restart: always
 
   worker:
-    image: crpi-34v4qt829vtet2cy.cn-hangzhou.personal.cr.aliyuncs.com/vss_edge/workbench:v1.3.0-alpha.temp # Use the same tag
+    image: crpi-34v4qt829vtet2cy.cn-hangzhou.personal.cr.aliyuncs.com/vss_edge/workbench:v1.4.0-alpha # Use the same tag
     restart: always
 
   worker-media:
-    image: crpi-xxx.../vss_edge/media-worker:v1.3.0-alpha.temp  #等待推送后获得完整地址
+    image: crpi-34v4qt829vtet2cy.cn-hangzhou.personal.cr.aliyuncs.com/vss_edge/media:v1.4.0-alpha  #等待推送后获得完整地址

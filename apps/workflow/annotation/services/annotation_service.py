@@ -61,11 +61,7 @@ class AnnotationService:
             # [Optimization] 使用 defer 推迟加载不需要的大字段 (如keyframe_map)
             # [Update] Slice 是 Refinery 的过程数据，Workbench 无需感知且数据量大，显式 defer
             # 仅加载核心业务字段 (id, dialogues, scenes) 以降低内存峰值
-            material = (
-                Material.objects.filter(media=job.media)
-                .defer("keyframe_map", "tech_meta", "error_log", "slices")
-                .first()
-            )
+            material = Material.objects.filter(media=job.media).defer("keyframe_map", "tech_meta", "slices").first()
         except ImportError:
             logger.warning("Refinery Material model not found. Skipping Refinery injection.")
         except Exception as e:
@@ -89,8 +85,8 @@ class AnnotationService:
 
                 # [核心适配] Refinery Material -> Annotation Schema
                 logger.info(f"Refinery Material found (ID: {material.id}). Injecting tracks...")
-                if material.dialogue:
-                    media_anno.dialogues = AnnotationService._adapt_refinery_dialogues(material.dialogue)
+                if material.dialogues:
+                    media_anno.dialogues = AnnotationService._adapt_refinery_dialogues(material.dialogues)
                 if material.scenes:
                     media_anno.scenes = AnnotationService._adapt_refinery_scenes(material.scenes)
             else:
@@ -175,10 +171,19 @@ class AnnotationService:
         """
         character_set = set()
 
-        # 1. [TODO] 优先从 Refinery Material.dialogue 中聚合
-        # 目前 Refinery 产出的 dialogue 分散在各句中，尚未进行全剧聚类和归一化。
-        # 未来计划：在 Refinery Pipeline 中增加 CharacterRefiner 步骤，
-        # 产出结构化的角色表 (Material.character_map)，届时在此处优先读取。
+        # 1. [Refinery Integration] 优先从 Refinery Material.identified_characters 中聚合
+        try:
+            from apps.atomflow.refinery.models import Material
+
+            # 只取 identified_characters 字段，减少 IO
+            material = Material.objects.filter(media=media).only("identified_characters").first()
+
+            if material and material.identified_characters:
+                for char_item in material.identified_characters:
+                    if isinstance(char_item, dict) and char_item.get("name"):
+                        character_set.add(str(char_item.get("name")).strip())
+        except Exception as e:
+            logger.warning(f"Failed to load Material.identified_characters: {e}")
 
         # 2. 兜底：使用 Asset 预设的 known_characters
         try:

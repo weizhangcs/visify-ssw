@@ -25,7 +25,7 @@ ENV_FILE=".env"
 
 # Docker Compose 文件
 BASE_COMPOSE_FILE="docker-compose.base.yml"
-DEPLOY_COMPOSE_FILE="docker-compose.dev.yml"
+DEPLOY_COMPOSE_FILE="docker-compose.test.yml"
 
 # Nginx 配置文件 (必须存在，用于卷挂载)
 NGINX_MEDIA_CONF="configs/nginx/vss-media-server.conf"

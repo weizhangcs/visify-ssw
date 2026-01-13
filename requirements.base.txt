@@ -47,6 +47,11 @@ sqlparse==0.5.3
 tzdata==2025.2
 wcwidth==0.2.13
 
+# AI & Vector Search
+numpy==1.26.4
+sentence-transformers
+faiss-cpu
+
 # Dev Tools
 pre_commit==4.5.0
 click==8.2.1
