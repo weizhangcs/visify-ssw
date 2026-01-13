@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Dict, List
 
 import requests
+from requests.adapters import HTTPAdapter
 
 logger = logging.getLogger(__name__)
 
@@ -35,6 +36,10 @@ class TicketUploader:
         self.material_id = material_id  # 实际的 material_id
         self.asset_id = asset_id
         self.gcs_session = requests.Session()
+
+        # [Fix] 优化连接池配置，增加底层连接重试 (针对握手/Header阶段)
+        adapter = HTTPAdapter(pool_connections=10, pool_maxsize=10, max_retries=3)
+        self.gcs_session.mount("https://", adapter)
 
     def upload_files(self, local_files: List[Path]) -> Dict[str, str]:
         """
@@ -121,8 +126,30 @@ class TicketUploader:
         """
         [内部方法] 上传单个文件到 GCS/S3。
         """
+        # [Fix] 增加应用层重试机制，处理 RemoteDisconnected 等网络不稳定情况
+        # 对于文件流上传，requests 无法自动重试 (因为无法 rewind file)，需手动处理
+        max_retries = 3
+        timeout = 60  # [Fix] 增加超时时间 (原 30s)
+        last_exception = None
+
         with open(local_path, "rb") as f:
-            resp = self.gcs_session.put(
-                signed_url, data=f, headers={"Content-Type": "application/octet-stream"}, timeout=30
-            )
-            resp.raise_for_status()
+            for attempt in range(max_retries):
+                try:
+                    f.seek(0)  # 每次重试前重置文件指针
+
+                    resp = self.gcs_session.put(
+                        signed_url, data=f, headers={"Content-Type": "application/octet-stream"}, timeout=timeout
+                    )
+                    resp.raise_for_status()
+                    return  # 成功则直接返回
+                except requests.RequestException as e:
+                    last_exception = e
+                    logger.warning(
+                        f"[{self.material_id}] Upload failed for {local_path.name} (Attempt {attempt + 1}/{max_retries}): {e}"  # noqa: E501
+                    )
+                    # 指数退避: 1s, 2s, 4s
+                    time.sleep(1 * (2**attempt))
+
+        # 重试耗尽，抛出最后一次异常
+        if last_exception:
+            raise last_exception

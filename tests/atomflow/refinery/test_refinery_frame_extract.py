@@ -24,7 +24,7 @@ def run_visual_flow_test():
     # 1. 物理落地规则 (Rule)
     # 专注于 frame_extract 和 frame_probe 两个步骤
     rules_json = [
-        {"seq": 1, "unit_slug": "frame_extract", "name": "关键帧提取", "obligation": "REQUIRED"},
+        {"seq": 9, "unit_slug": "frame_probe", "name": "关键帧检测", "obligation": "REQUIRED"},
     ]
 
     rule, _ = RefineryAtomRule.objects.update_or_create(

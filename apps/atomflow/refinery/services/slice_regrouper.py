@@ -5,10 +5,9 @@ import tempfile
 from pathlib import Path
 from typing import Any, Dict, List
 
-from apps.atomflow.refinery.schemas import SceneType
 from apps.common.cloud_client import CloudApiService
 from apps.common.schemas.refinery.slice_regrouper import MultimodalSlice as ExecMultimodalSlice
-from apps.common.schemas.refinery.slice_regrouper import SliceRegrouperPayload
+from apps.common.schemas.refinery.slice_regrouper import SliceRegrouperPayload, SliceRegrouperResponse
 
 logger = logging.getLogger(__name__)
 
@@ -28,18 +27,20 @@ class SliceRegrouperService:
     def run(
         client: CloudApiService,
         slices: List[Dict[str, Any]],
+        dialogues: List[Dict[str, Any]],
         lang: str,
-    ) -> Dict[str, Any]:
+    ) -> SliceRegrouperResponse:
         """
         执行场景聚类与归纳任务。
 
         Args:
             client: CloudApiService 实例。
             slices: 富切片列表，格式 List[MultimodalSlice.model_dump()]。
+            dialogues: 对白数据 (SSOT)，用于 Hydration。
             lang: 目标语言代码 ("zh" or "en")。
 
         Returns:
-            分析结果字典 (包含 scenes 列表)。
+            SliceRegrouperResponse 对象。
 
         Raises:
             RuntimeError: 如果任务创建、执行或下载失败。
@@ -47,14 +48,26 @@ class SliceRegrouperService:
         if not slices:
             return {"scenes": []}
 
+        # [Phase 1] Build Lookup Map
+        dialogue_map = {d["id"]: d for d in dialogues if d.get("id")}
+
         # 1. 数据转换 (Dict -> Execution Schema)
         # 使用 Pydantic 进行转换和校验，确保符合 Cloud 契约
         exec_slices = []
         try:
             for s in slices:
+                s_copy = s.copy()
+
+                # [Phase 1] Hydrate Text Data
+                d_ids = s_copy.get("dialogue_ids", [])
+                text_contents = []
+                for d_id in d_ids:
+                    if d_id in dialogue_map:
+                        text_contents.append(dialogue_map[d_id])
+                s_copy["text_contents"] = text_contents
+
                 # [Adapter] Flatten SliceTypeLabel to string for Cloud API
                 # Local 'type' is {'value': '...', 'label': '...'}, Cloud expects 'value' string
-                s_copy = s.copy()
                 if isinstance(s_copy.get("type"), dict):
                     s_copy["type"] = s_copy["type"].get("value")
 
@@ -105,31 +118,9 @@ class SliceRegrouperService:
             if not dl_success:
                 raise RuntimeError(f"SliceRegrouper: Failed to download result file from {download_url}")
             try:
-                data = json.loads(content_bytes.decode("utf-8"))
-
-                # [Adapter] Hydrate SceneType string to SceneTypeLabel
-                scenes = data.get("scenes", [])
-                for scene in scenes:
-                    content = scene.get("content", {})
-                    if "scene_type" in content:
-                        raw_type = content["scene_type"]
-                        if isinstance(raw_type, str):
-                            content["scene_type"] = SliceRegrouperService._get_scene_type_label(raw_type, lang)
-                return data
+                # Use Pydantic validation
+                return SliceRegrouperResponse.model_validate_json(content_bytes.decode("utf-8"))
             except Exception as e:
                 raise RuntimeError(f"SliceRegrouper: Failed to parse result JSON: {e}")
 
         raise RuntimeError("SliceRegrouper: Task completed but no download_url provided.")
-
-    @staticmethod
-    def _get_scene_type_label(value: str, lang: str = "zh") -> Dict[str, str]:
-        """Helper to construct SceneTypeLabel with i18n."""
-        labels = {
-            SceneType.DIALOGUE: {"zh": "对话/文戏", "en": "Dialogue"},
-            SceneType.ACTION: {"zh": "动作/冲突", "en": "Action"},
-            SceneType.MONTAGE: {"zh": "蒙太奇", "en": "Montage"},
-            SceneType.ESTABLISHING: {"zh": "建立/空镜", "en": "Establishing"},
-            SceneType.EMOTIONAL: {"zh": "情感/特写", "en": "Emotional"},
-        }
-        label_text = labels.get(value, {}).get(lang, "Unknown")
-        return {"value": value, "label": label_text}

@@ -1,6 +1,7 @@
-from typing import List, Literal, Optional
+from enum import Enum
+from typing import Any, Dict, List, Literal, Optional
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 
 class VisualFrameInput(BaseModel):
@@ -50,3 +51,69 @@ class VisualAnalyzerPayload(BaseModel):
             if sp and (sp.model or sp.batch_size or sp.max_workers or sp.temperature or sp.max_retries):
                 raise ValueError("In PROD mode, technical parameters are not allowed in payload.")
         return self
+
+
+class ShotType(str, Enum):
+    EXTREME_CLOSE_UP = "extreme_close_up"
+    CLOSE_UP = "close_up"
+    MEDIUM_CLOSE_UP = "medium_close_up"
+    MEDIUM_SHOT = "medium_shot"
+    MEDIUM_LONG_SHOT = "medium_long_shot"
+    LONG_SHOT = "long_shot"
+    EXTREME_LONG_SHOT = "extreme_long_shot"
+    ESTABLISHING_SHOT = "establishing_shot"
+    OTHER = "other"
+
+
+# 官方翻译映射表
+SHOT_TYPE_LABELS = {
+    "zh": {
+        ShotType.EXTREME_CLOSE_UP: "大特写",
+        ShotType.CLOSE_UP: "特写",
+        ShotType.MEDIUM_CLOSE_UP: "近景",
+        ShotType.MEDIUM_SHOT: "中景",
+        ShotType.MEDIUM_LONG_SHOT: "中远景",
+        ShotType.LONG_SHOT: "远景",
+        ShotType.EXTREME_LONG_SHOT: "大远景",
+        ShotType.ESTABLISHING_SHOT: "建立镜头",
+        ShotType.OTHER: "其他",
+    },
+    "en": {
+        ShotType.EXTREME_CLOSE_UP: "Extreme Close Up",
+        ShotType.CLOSE_UP: "Close Up",
+        ShotType.MEDIUM_CLOSE_UP: "Medium Close Up",
+        ShotType.MEDIUM_SHOT: "Medium Shot",
+        ShotType.MEDIUM_LONG_SHOT: "Medium Long Shot",
+        ShotType.LONG_SHOT: "Long Shot",
+        ShotType.EXTREME_LONG_SHOT: "Extreme Long Shot",
+        ShotType.ESTABLISHING_SHOT: "Establishing Shot",
+        ShotType.OTHER: "Other",
+    },
+}
+
+
+class LabelItem(BaseModel):
+    value: str
+    label: str
+
+
+class VisualAnalysisData(BaseModel):
+    shot_type: Optional[LabelItem] = Field(None, description="Main shot size (Value + Label)")
+    environment: Optional[str] = Field(None, description="Physical environment")
+    subject: Optional[str] = None
+    action: Optional[str] = None
+    lighting_time: Optional[str] = Field(None, description="Time or lighting characteristics")
+    visual_mood_tags: List[str] = Field(default_factory=list)
+
+    model_config = ConfigDict(extra="allow")
+
+
+class AnnotatedFrame(BaseModel):
+    frame_id: str
+    visual_analysis: VisualAnalysisData
+
+
+class VisualAnalyzerResponse(BaseModel):
+    annotated_frames: List[AnnotatedFrame]
+    stats: Dict[str, Any]
+    usage_report: Dict[str, Any]

@@ -115,6 +115,12 @@ class SynchronizeContextMixin:
         }
         target.keyframe_map = processed_map
 
+        # [Phase 1] 同步更新扁平化 frames
+        all_frames = []
+        for frames in processed_map.values():
+            all_frames.extend(frames)
+        target.frames = all_frames
+
     def _check_synchronize_ready(self, target):
         """
         Check if the Sync task is ready to run.

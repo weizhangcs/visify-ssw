@@ -1,4 +1,4 @@
-from typing import List, Literal, Optional
+from typing import Any, Dict, List, Literal, Optional
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
@@ -18,6 +18,7 @@ class SubtitleItem(BaseModel):
     [Execution Schema] 用于角色识别的字幕项
     """
 
+    id: Optional[str] = Field(default=None, description="UUID")
     index: int = Field(..., description="Original subtitle index")
     start_time: float = Field(..., description="Start time in seconds")
     end_time: float = Field(..., description="End time in seconds")
@@ -64,3 +65,18 @@ class CharacterIdentifierPayload(BaseModel):
             if sp and (sp.model or sp.batch_size or sp.temperature or sp.max_retries):
                 raise ValueError("In PROD mode, technical parameters are not allowed in payload.")
         return self
+
+
+class IdentifiedSubtitleItem(BaseModel):
+    """识别结果项"""
+
+    id: Optional[str] = Field(None, description="UUID of the subtitle line")
+    index: int
+    speaker: str
+    reasoning: Optional[str] = None
+
+
+class CharacterIdentifierResponse(BaseModel):
+    identified_subtitles: List[IdentifiedSubtitleItem]
+    stats: Dict[str, Any]
+    usage_report: Dict[str, Any]

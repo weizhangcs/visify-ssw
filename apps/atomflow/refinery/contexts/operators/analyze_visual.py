@@ -107,6 +107,12 @@ class AnalyzeVisualContextMixin:
 
         target.keyframe_map = updated_map
 
+        # [Phase 1] 同步更新扁平化 frames
+        all_frames = []
+        for frames in updated_map.values():
+            all_frames.extend(frames)
+        target.frames = all_frames
+
     def _check_analyze_visual_ready(self, target):
         """
         Check if the Visual Analyzer task is ready to run.

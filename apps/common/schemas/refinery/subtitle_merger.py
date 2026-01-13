@@ -1,4 +1,4 @@
-from typing import List, Literal, Optional
+from typing import Dict, List, Literal, Optional
 
 from pydantic import BaseModel, Field, model_validator
 
@@ -8,6 +8,7 @@ class SubtitleItem(BaseModel):
     [Execution Schema] 用于云端推理的字幕项定义
     """
 
+    id: Optional[str] = Field(default=None, description="UUID (Input/Output)")
     index: int = Field(..., description="Original subtitle index")
     start_time: float = Field(..., description="Start time in seconds")
     end_time: float = Field(..., description="End time in seconds")
@@ -47,3 +48,20 @@ class SubtitleMergerPayload(BaseModel):
                     "In PROD mode, technical parameters (service_params) are not allowed. They are sourced from config."
                 )
         return self
+
+
+class MergedSubtitleItem(BaseModel):
+    id: Optional[str] = Field(None, description="UUID for the merged subtitle line")
+    index: int
+    start_time: float
+    end_time: float
+    content: str
+    original_indices: List[int] = Field(
+        default_factory=list, description="List of original indices merged into this item"
+    )
+
+
+class SubtitleMergerResponse(BaseModel):
+    merged_subtitles: List[MergedSubtitleItem]
+    stats: Dict
+    usage_report: Dict

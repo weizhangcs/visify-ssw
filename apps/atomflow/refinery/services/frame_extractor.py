@@ -4,6 +4,7 @@ import hashlib
 import logging
 import re
 import subprocess
+import uuid
 from pathlib import Path
 from typing import Dict, List, Tuple
 
@@ -102,7 +103,7 @@ class FrameExtractorService:
 
         start_time = slice_obj.start_time
         end_time = slice_obj.end_time
-        slice_id_str = str(slice_obj.slice_id)
+        slice_id_str = str(slice_obj.id)  # [Phase 1] 使用 UUID
 
         # 1. 检测切片内部的视觉变化点
         internal_changes = FrameExtractorService._detect_internal_visual_changes(video_path, start_time, end_time)
@@ -131,7 +132,7 @@ class FrameExtractorService:
 
         extracted_frame_inputs = []
         for i, (timestamp, reason) in enumerate(unique_frames_to_extract):
-            file_name = f"slice_{slice_obj.slice_id:04d}_{reason}_{i:02d}.jpg"  # noqa: E231
+            file_name = f"slice_{slice_obj.index:04d}_{reason}_{i:02d}.jpg"  # noqa: E231
             abs_path = abs_dir / file_name
             rel_path = str(rel_dir / file_name).replace("\\", "/")
 
@@ -166,7 +167,12 @@ class FrameExtractorService:
 
                 extracted_frame_inputs.append(
                     KeyframeItem(
-                        timestamp=timestamp, path=rel_path, reason=reason, slice_id=slice_obj.slice_id, digest=digest
+                        id=str(uuid.uuid4()),  # [Phase 1] UUID
+                        timestamp=timestamp,
+                        path=rel_path,
+                        reason=reason,
+                        slice_id=slice_obj.id,  # [Phase 1] 引用 Slice UUID
+                        digest=digest,
                     ).model_dump()
                 )
             except subprocess.TimeoutExpired:

@@ -29,6 +29,8 @@ class RegroupSliceContextMixin:
 
         return {
             "slices": target.slices,  # 传递富切片列表
+            # [Phase 1] 注入 SSOT 对白数据
+            "dialogues": target.dialogues,
             "lang": lang,
         }
 
@@ -53,6 +55,11 @@ class RegroupSliceContextMixin:
         validated_scenes = []
         for s in scenes_data:
             try:
+                # [Adapter] Cloud returns 'scene_id' (int), map to Local 'index'
+                # VSS Cloud 返回的是 scene_id (int)，对应本地的 index
+                if "scene_id" in s and "index" not in s:
+                    s["index"] = s["scene_id"]
+
                 # Ensure content is validated against SceneContent
                 content_obj = SceneContent(**s["content"])
                 s["content"] = content_obj.model_dump()

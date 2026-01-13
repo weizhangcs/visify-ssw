@@ -51,7 +51,11 @@ class RefineryAtomScheduler(BaseAtomScheduler):
 
             # 3. 点火派发
             for step in start_steps:
-                cls.dispatch(str(pipeline.id), step)
+                # [Fix] 启动时也要检查 scope，防止将 Asset 任务错发为 Atomic 任务
+                if step.get("scope") == "ASSET":
+                    cls.handle_asset_barrier(pipeline, step)
+                else:
+                    cls.dispatch(str(pipeline.id), step)
 
         except Exception as e:
             logger.error(f"Failed to start pipeline {pipeline_id}: {e}", exc_info=True)

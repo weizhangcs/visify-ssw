@@ -1,8 +1,7 @@
-from typing import Any, List, Literal, Optional
+from typing import Any, Dict, List, Literal, Optional
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-# 复用 SliceRegrouper 中定义的 MultimodalSlice 结构作为输入
 # ==============================================================================
 # 1. 输入侧 Schemas (MultimodalSlice - Local Copy for Isolation)
 # ==============================================================================
@@ -15,6 +14,7 @@ class AudioAnalysis(BaseModel):
 
 class SubtitleItem(BaseModel):
     index: int
+    id: Optional[str] = None
     content: str
     start_time: float
     end_time: float
@@ -24,7 +24,6 @@ class SubtitleItem(BaseModel):
 
 
 class VisualAnalysisData(BaseModel):
-    # 兼容上游 Visual Analyzer 的输出 (可能是 LabelItem 字典，也可能是旧的字符串)
     shot_type: Optional[Any] = None
     environment: Optional[str] = None
     subject: Optional[str] = None
@@ -47,7 +46,8 @@ class MultimodalSlice(BaseModel):
     [Input] 多模态切片输入。
     """
 
-    slice_id: int
+    id: str = Field(..., description="Slice UUID")
+    index: int = Field(..., description="Global sort order (0-based)")
     start_time: float
     end_time: float
     type: str
@@ -56,45 +56,50 @@ class MultimodalSlice(BaseModel):
     model_config = ConfigDict(extra="ignore")
 
 
-class SliceAnalysis(BaseModel):
-    """
-    [Execution Schema] 切片分析结果
-    """
+# ==============================================================================
+# 2. 输出侧 Schemas (Slice Analysis)
+# ==============================================================================
 
-    narrative_summary: Optional[str] = None
-    visual_summary: Optional[str] = None
-    tags: List[str] = Field(default_factory=list)
-    model_config = ConfigDict(extra="ignore")
+
+class SliceAnalysis(BaseModel):
+    narrative_summary: str = Field(..., description="Summary of the narrative content (dialogue/action).")
+    visual_summary: str = Field(..., description="Summary of visual elements (shot/lighting/composition).")
+    tags: List[str] = Field(
+        default_factory=list, description="Semantic tags (e.g. Reaction_Shot, Close_Up, Emotional)."
+    )
 
 
 class AnalyzedSlice(BaseModel):
-    """
-    [Execution Schema] 包含分析结果的切片
-    """
-
-    slice_id: int
+    id: str = Field(..., description="Slice UUID")
     slice_analysis: SliceAnalysis
+
+
+class SliceAnalyzerResponse(BaseModel):
+    analyzed_slices: List[AnalyzedSlice]
+    stats: Dict[str, Any]
+    usage_report: Dict[str, Any]
+
+
+# ==============================================================================
+# 3. 任务 Payload
+# ==============================================================================
 
 
 class SliceAnalyzerServiceParams(BaseModel):
     """Technical parameters for DEBUG mode"""
 
     model: Optional[str] = Field(None, description="LLM model name")
-    batch_size: Optional[int] = Field(None, description="Batch size")
-    temperature: Optional[float] = Field(None, description="Temperature")
+    batch_size: Optional[int] = Field(None, description="Slices per batch")
+    temperature: Optional[float] = Field(None, description="Temperature for LLM")
     max_retries: Optional[int] = Field(None, description="Max retries")
 
 
 class SliceAnalyzerPayload(BaseModel):
-    """
-    [Execution Schema] REFINERY_SLICE_ANALYZER 任务载荷
-    """
-
     lang: str = Field("zh", description="Language code")
     mode: Literal["PROD", "DEBUG"] = Field("PROD", description="Operation mode")
 
     # Data Source
-    slices_file_path: Optional[str] = Field(None, description="Path to rich slices JSON (Production)")
+    slices_file_path: Optional[str] = Field(None, description="Path to the rich slices JSON file (Production)")
     slices: Optional[List[MultimodalSlice]] = Field(None, description="Direct list (Debug)")
 
     # Debug Params

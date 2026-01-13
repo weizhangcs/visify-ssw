@@ -112,7 +112,8 @@ class SubtitleItem(BaseModel):
     2. 作为 Material.dialogues 列表元素的存储标准。
     """
 
-    index: int = Field(..., description="行号索引")
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()), description="唯一标识UUID")
+    index: int = Field(..., description="全局递增序号")
     content: str = Field(..., description="对白文本内容")
     start_time: float = Field(..., description="起始秒数")
     end_time: float = Field(..., description="结束秒数")
@@ -197,8 +198,8 @@ class KeyframeItem(FrameBase):
     记录了帧的生命周期：从本地提取 -> 云端同步 -> 视觉分析。
     """
 
-    frame_id: str = Field(default_factory=lambda: str(uuid.uuid4()), description="帧的唯一标识符")
-    slice_id: int = Field(..., description="所属切片的ID")
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()), description="唯一标识UUID")
+    slice_id: str = Field(..., description="所属切片的UUID")
     timestamp: float = Field(..., description="帧在视频中的时间戳（秒）")
     path: str = Field(..., description="相对路径 (本地或云端)")
     digest: Optional[str] = Field(default=None, description="文件内容摘要 (MD5/SHA256)")
@@ -264,12 +265,16 @@ class Slice(BaseModel):
     将时间轴上的一个片段聚合了视觉、听觉和文本信息。
     """
 
-    slice_id: int
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()), description="唯一标识UUID")
+    index: int = Field(..., description="全局递增序号")
     start_time: float
     end_time: float
     type: SliceTypeLabel = Field(..., description="visual_segment | dialogue (Value + Label)")
-    text_contents: List[SubtitleItem] = Field(default_factory=list, description="无损对白数据")
-    visual_contents: List[KeyframeItem] = Field(default_factory=list, description="无损视觉分析数据")
+
+    # [Phase 1] 引用解耦
+    dialogue_ids: List[str] = Field(default_factory=list, description="关联对白UUID列表")
+    frame_ids: List[str] = Field(default_factory=list, description="关联关键帧UUID列表")
+
     audio_contents: AudioContent = Field(default_factory=AudioContent)
     slice_analysis: Optional[SliceAnalysis] = Field(default=None, description="切片语义分析结果")
 
@@ -350,8 +355,9 @@ class Scene(BaseModel):
     由 SliceRegrouper 算子生成，是 Refinery 流程的最终产出之一。
     """
 
-    scene_id: int = Field(..., description="场景的顺序 ID")
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()), description="唯一标识UUID")
+    index: int = Field(..., description="全局递增序号")
     start_time: float = Field(..., description="场景的起始时间（秒）")
     end_time: float = Field(..., description="场景的结束时间（秒）")
     content: SceneContent = Field(..., description="场景的语义内容")
-    slice_ids: List[int] = Field(..., description="构成此场景的原始 MultimodalSlice ID 列表")
+    slice_ids: List[str] = Field(..., description="构成此场景的原始 Slice UUID 列表")

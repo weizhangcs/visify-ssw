@@ -7,7 +7,7 @@ from typing import Any, Dict, List
 
 from apps.common.cloud_client import CloudApiService
 from apps.common.schemas.refinery.character_identifier import AudioAnalysis as ExecAudioAnalysis
-from apps.common.schemas.refinery.character_identifier import CharacterIdentifierPayload
+from apps.common.schemas.refinery.character_identifier import CharacterIdentifierPayload, CharacterIdentifierResponse
 from apps.common.schemas.refinery.character_identifier import SubtitleItem as ExecSubtitleItem
 
 logger = logging.getLogger(__name__)
@@ -20,7 +20,7 @@ class CharacterRefinerService:
     """
 
     @staticmethod
-    def run(client: CloudApiService, dialogues: List[Dict], asset_meta: Dict[str, Any]) -> Dict[str, Any]:
+    def run(client: CloudApiService, dialogues: List[Dict], asset_meta: Dict[str, Any]) -> CharacterIdentifierResponse:
         """
         执行角色识别任务。
 
@@ -34,7 +34,7 @@ class CharacterRefinerService:
         """
         if not dialogues:
             logger.warning("CharacterRefiner: No dialogue data provided.")
-            return {"identified_subtitles": []}
+            return CharacterIdentifierResponse(identified_subtitles=[], stats={}, usage_report={})
 
         # 1. 数据转换 (Dict -> Execution Schema)
         exec_items = []
@@ -46,6 +46,7 @@ class CharacterRefinerService:
 
             exec_items.append(
                 ExecSubtitleItem(
+                    id=item.get("id"),  # [CR] Pass UUID
                     index=item["index"],
                     start_time=item["start_time"],
                     end_time=item["end_time"],
@@ -105,4 +106,5 @@ class CharacterRefinerService:
         if not dl_success:
             raise RuntimeError(f"CharacterRefiner: 结果下载失败 - {download_url}")
 
-        return json.loads(content_bytes.decode("utf-8"))
+        # 使用 Pydantic 进行 Response 校验
+        return CharacterIdentifierResponse.model_validate_json(content_bytes.decode("utf-8"))

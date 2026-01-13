@@ -6,8 +6,8 @@ from pathlib import Path
 from typing import Any, Dict, List
 
 from apps.common.cloud_client import CloudApiService
-from apps.common.schemas.refinery.slice_analyzer import SliceAnalyzerPayload
-from apps.common.schemas.refinery.slice_regrouper import MultimodalSlice as ExecMultimodalSlice
+from apps.common.schemas.refinery.slice_analyzer import MultimodalSlice as ExecMultimodalSlice
+from apps.common.schemas.refinery.slice_analyzer import SliceAnalyzerPayload, SliceAnalyzerResponse
 
 logger = logging.getLogger(__name__)
 
@@ -28,6 +28,7 @@ class SliceAnalyzerService:
         client: CloudApiService,
         slices: List[Dict[str, Any]],
         keyframe_map: Dict[str, List[Dict[str, Any]]],
+        dialogues: List[Dict[str, Any]],
         lang: str,
     ) -> Dict[str, Any]:
         """
@@ -36,17 +37,36 @@ class SliceAnalyzerService:
         if not slices:
             return {"slices": []}
 
+        # [Phase 1] Build Lookup Map for Text Hydration
+        dialogue_map = {d["id"]: d for d in dialogues if d.get("id")}
+
         # 1. Hydration & Data Conversion
         exec_slices = []
         try:
             for s in slices:
                 # 复制一份以避免修改原始引用
                 s_copy = s.copy()
-                slice_id = str(s_copy.get("slice_id"))
 
                 # 回填视觉数据
-                if keyframe_map and slice_id in keyframe_map:
-                    s_copy["visual_contents"] = keyframe_map[slice_id]
+                if keyframe_map and s_copy.get("id") in keyframe_map:
+                    # [Fix] Adapt local KeyframeItem (id) to Cloud FrameDataInput (frame_id)
+                    raw_frames = keyframe_map[s_copy.get("id")]
+                    adapted_frames = []
+                    for f in raw_frames:
+                        f_adapted = f.copy()
+                        if "id" in f_adapted:
+                            f_adapted["frame_id"] = f_adapted.pop("id")
+                        adapted_frames.append(f_adapted)
+                    s_copy["visual_contents"] = adapted_frames
+
+                # [Phase 1] Hydrate Text Data
+                # 将 dialogue_ids 转换为 text_contents 实体列表
+                d_ids = s_copy.get("dialogue_ids", [])
+                text_contents = []
+                for d_id in d_ids:
+                    if d_id in dialogue_map:
+                        text_contents.append(dialogue_map[d_id])
+                s_copy["text_contents"] = text_contents
 
                 # [Adapter] Flatten SliceTypeLabel to string for Cloud API
                 if isinstance(s_copy.get("type"), dict):
@@ -99,19 +119,22 @@ class SliceAnalyzerService:
             raise RuntimeError(f"SliceAnalyzer: Failed to download result file from {download_url}")
 
         try:
-            # 结果格式: {"analyzed_slices": [{"slice_id": 1, "slice_analysis": {...}}, ...]}
-            result_data = json.loads(content_bytes.decode("utf-8"))
-            analyzed_slices = result_data.get("analyzed_slices", [])
+            # Use Pydantic validation
+            response = SliceAnalyzerResponse.model_validate_json(content_bytes.decode("utf-8"))
+            analyzed_slices = response.analyzed_slices
 
             # 7. Merge Analysis back to Hydrated Slices
             # 我们需要返回包含 visual_contents 和 slice_analysis 的完整切片
-            analysis_map = {item["slice_id"]: item["slice_analysis"] for item in analyzed_slices}
+            analysis_map = {item.id: item.slice_analysis.model_dump() for item in analyzed_slices}
 
             final_slices = []
-            for es in exec_slices:
-                s_dict = es.model_dump()
-                if es.slice_id in analysis_map:
-                    s_dict["slice_analysis"] = analysis_map[es.slice_id]
+            # [Fix] 遍历原始 slices 以保留本地数据结构 (LabelValue type, reference IDs)
+            # 不要使用 exec_slices，因为它已经丢失了本地字段且 type 被扁平化了
+            for s in slices:
+                s_dict = s.copy()
+                s_id = s_dict.get("id")
+                if s_id in analysis_map:
+                    s_dict["slice_analysis"] = analysis_map[s_id]
                 final_slices.append(s_dict)
 
             return {"slices": final_slices}

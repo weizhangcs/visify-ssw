@@ -252,9 +252,9 @@ def _dispatch_service(op_slug: str, payload: dict, target_id: str) -> dict:
 
         # [Update] 直接传递数据，Service 负责 Schema 转换和上传
         result_data = CharacterRefinerService.run(client, payload["dialogues"], asset_meta)
-        # 获取增量更新数据
-        # Cloud 返回结构: {"identified_subtitles": [...], "stats": ...}
-        updates = result_data.get("identified_subtitles", [])
+
+        # [Schema Update] result_data 是 CharacterIdentifierResponse 对象
+        updates = [item.model_dump() for item in result_data.identified_subtitles]
 
         # 合并逻辑已移至 Context
         return {"updates": updates}
@@ -277,18 +277,23 @@ def _dispatch_service(op_slug: str, payload: dict, target_id: str) -> dict:
         client = CloudApiService()
         frames = payload["frames"]
         lang = payload["lang"]
-        return VisualAnalyzerService.run(client, frames, lang)
+        result_data = VisualAnalyzerService.run(client, frames, lang)
+        return result_data.model_dump()
 
     elif op_slug == "analyze_slice":
         client = CloudApiService()
         # SliceAnalyzer 负责 Hydration，所以需要 keyframe_map
-        return SliceAnalyzerService.run(client, payload["slices"], payload["keyframe_map"], payload["lang"])
+        # [Phase 1] 传递 dialogues 用于文本回填
+        return SliceAnalyzerService.run(
+            client, payload["slices"], payload["keyframe_map"], payload["dialogues"], payload["lang"]
+        )
 
     elif op_slug == "regroup_slice":
         client = CloudApiService()
         slices = payload["slices"]
         lang = payload["lang"]
-        return SliceRegrouperService.run(client, slices, lang)
+        result_data = SliceRegrouperService.run(client, slices, payload["dialogues"], lang)
+        return result_data.model_dump()
 
     elif op_slug == "verify_scene":
         video_path = Path(payload["video_path"])
@@ -298,8 +303,9 @@ def _dispatch_service(op_slug: str, payload: dict, target_id: str) -> dict:
 
     elif op_slug == "vector_index":
         slices = payload["slices"]
+        dialogues = payload["dialogues"]
         abs_output_path = Path(payload["output_path"])
-        VectorIndexerService.run(slices, abs_output_path)
+        VectorIndexerService.run(slices, dialogues, abs_output_path)
         return {"rel_path": payload["rel_path"]}
 
     else:

@@ -117,7 +117,10 @@ class Material(TimeStampedModel):
     scenes = models.JSONField(default=list, blank=True, verbose_name=_("场景容器"))
     dialogues = models.JSONField(default=list, blank=True, verbose_name=_("对白容器"))
     identified_characters = models.JSONField(default=list, blank=True, verbose_name=_("识别角色清单"))
-    keyframe_map = models.JSONField(default=dict, blank=True, verbose_name=_("关键帧映射表"))
+
+    # [Phase 1] 视觉资产重构
+    frames = models.JSONField(default=list, blank=True, verbose_name=_("扁平化关键帧列表"))
+    keyframe_map = models.JSONField(default=dict, blank=True, verbose_name=_("关键帧映射表(Legacy)"))
 
     # ==========================================================================
     # 4. 搜索与索引 (Search & Indexing)
