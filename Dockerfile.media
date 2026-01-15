@@ -1,15 +1,17 @@
 # Dockerfile.media
 FROM crpi-34v4qt829vtet2cy.cn-hangzhou.personal.cr.aliyuncs.com/vss_base/python:3.12-slim
 
+# 1. 定义镜像源参数
 ARG APT_MIRROR=mirrors.aliyun.com
-ARG PIP_MIRROR_URL=https://pypi.tuna.tsinghua.edu.cn/simple/
+# 建议使用阿里云 pypi 源，和您的基础镜像网络环境更匹配，或者继续用清华源
+ARG PIP_MIRROR_URL=https://mirrors.aliyun.com/pypi/simple/
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     PIP_DISABLE_PIP_VERSION_CHECK=1 \
     PIP_NO_CACHE_DIR=1
 
-# [关键] 保留 FFmpeg 及必要的媒体处理库
+# 2. [系统依赖] 换源并安装
 RUN sed -i "s|deb.debian.org|$APT_MIRROR|g" /etc/apt/sources.list.d/debian.sources && \
     sed -i "s|security.debian.org|$APT_MIRROR|g" /etc/apt/sources.list.d/debian.sources && \
     apt-get update && \
@@ -25,11 +27,33 @@ RUN sed -i "s|deb.debian.org|$APT_MIRROR|g" /etc/apt/sources.list.d/debian.sourc
 
 WORKDIR /app
 
-# [变更] 安装全量媒体依赖
+# -----------------------------------------------------------
+# 🛑 [核心修复] 全局配置 pip 镜像源
+# -----------------------------------------------------------
+# 这行命令确保了后续所有的 pip install (无论本地还是在线)
+# 只要涉及下载，全部强制走国内镜像！
+RUN pip config set global.index-url $PIP_MIRROR_URL && \
+    pip config set global.timeout 1000
+
+# -----------------------------------------------------------
+# 🚀 [第一步] 离线安装 PyTorch 本体 + 在线极速下载依赖
+# -----------------------------------------------------------
+COPY local_packages/ /tmp/packages/
+
+# 现在，pip 解析 sympy 等依赖时，会飞快地从阿里云/清华下载
+# 不再需要手动加 -i 参数，也不再需要 --default-timeout
+RUN pip install --no-cache-dir /tmp/packages/torch-*.whl /tmp/packages/torchvision-*.whl && \
+    rm -rf /tmp/packages
+
+# -----------------------------------------------------------
+# 🚀 [第二步] 安装其余依赖
+# -----------------------------------------------------------
 COPY requirements.base.txt .
 COPY requirements.media.txt .
+
+# 这里也不需要再加 -i 了，因为全局已经配好了
 RUN pip install --upgrade pip && \
-    pip install --no-cache-dir -i ${PIP_MIRROR_URL} -r requirements.media.txt
+    pip install --no-cache-dir -r requirements.media.txt
 
 # [变更] 离线模式：将本地预下载的模型复制到镜像中
 # 对应 scripts/download_model.py 下载的目录

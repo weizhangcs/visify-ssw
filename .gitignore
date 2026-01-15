@@ -47,3 +47,5 @@ htmlcov/
 /tests/testdata/
 /doc/
 /local_models/
+/local_packages/
+dist/

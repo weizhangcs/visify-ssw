@@ -1,16 +1,16 @@
 # Dockerfile.workbench
-# 基础镜像保持一致
 FROM crpi-34v4qt829vtet2cy.cn-hangzhou.personal.cr.aliyuncs.com/vss_base/python:3.12-slim
 
+# 1. 统一镜像源参数
 ARG APT_MIRROR=mirrors.aliyun.com
-ARG PIP_MIRROR_URL=https://pypi.tuna.tsinghua.edu.cn/simple/
+ARG PIP_MIRROR_URL=https://mirrors.aliyun.com/pypi/simple/
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     PIP_DISABLE_PIP_VERSION_CHECK=1 \
     PIP_NO_CACHE_DIR=1
 
-# [变更] 移除 ffmpeg，仅保留 Web/DB 必要的系统库
+# 2. 系统依赖 (保持精简，但换源)
 RUN sed -i "s|deb.debian.org|$APT_MIRROR|g" /etc/apt/sources.list.d/debian.sources && \
     sed -i "s|security.debian.org|$APT_MIRROR|g" /etc/apt/sources.list.d/debian.sources && \
     apt-get update && \
@@ -22,10 +22,26 @@ RUN sed -i "s|deb.debian.org|$APT_MIRROR|g" /etc/apt/sources.list.d/debian.sourc
 
 WORKDIR /app
 
-# [变更] 仅复制和安装基础依赖
+# 3. [关键优化] 全局配置 pip 源 (解决依赖下载超时)
+RUN pip config set global.index-url $PIP_MIRROR_URL && \
+    pip config set global.timeout 1000
+
+# 4. [防御性措施] 离线安装 PyTorch
+# 即使 Workbench 暂时不用 AI，加上这一步也不亏（因为只是读本地文件），
+# 但如果 requirements.base.txt 里万一混入了 AI 库，这一步能救命（避免下载 GPU 版）。
+COPY local_packages/ /tmp/packages/
+RUN pip install --no-cache-dir /tmp/packages/torch-*.whl /tmp/packages/torchvision-*.whl && \
+    rm -rf /tmp/packages
+
+# 5. 安装基础依赖
 COPY requirements.base.txt .
+# 此时不需要再加 -i 参数
 RUN pip install --upgrade pip && \
-    pip install --no-cache-dir -i ${PIP_MIRROR_URL} -r requirements.base.txt
+    pip install --no-cache-dir -r requirements.base.txt
+
+# [变更] 离线模式：将本地预下载的模型复制到镜像中
+# 对应 scripts/download_model.py 下载的目录
+COPY local_models /app/local_models
 
 COPY . .
 
