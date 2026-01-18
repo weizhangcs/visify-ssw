@@ -42,6 +42,11 @@ class TranscoderService:
             "scale=-2:720",
             "-preset",
             "ultrafast",
+            # [Fix] 强制音频转码为 AAC, 44.1kHz, 双声道，解决 HLS bufferAppendError
+            "-c:a",
+            "aac",
+            "-ac",
+            "2",
             "-y",
             str(output_path),
         ]

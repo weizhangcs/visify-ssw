@@ -32,9 +32,6 @@ services:
 
   # 1. Web 容器 (轻量级)
   web:
-    build:
-      context: .
-      dockerfile: Dockerfile.workbench
     command: python manage.py runserver 0.0.0.0:8000
     ports:
       - "18000:8000"
@@ -52,9 +49,6 @@ services:
 
   # 2. 通用 Worker (轻量级，处理默认队列)
   worker:
-    build:
-      context: .
-      dockerfile: Dockerfile.workbench
     command: celery -A visify_ssw worker -l info -Q celery,default --concurrency=2
     user: root
     env_file:
@@ -68,9 +62,6 @@ services:
 
   # 3. [NEW] 媒体算力 Worker (重量级，处理 media_queue)
   worker-media:
-    build:
-      context: .
-      dockerfile: Dockerfile.media
     # 显式指定消费 media_queue
     command: celery -A visify_ssw worker -l info -Q media_queue --concurrency=1
     user: root

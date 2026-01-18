@@ -1,4 +1,5 @@
 # apps/workflow/annotation/services/annotation_service.py
+import copy
 import logging
 import uuid
 from datetime import datetime
@@ -86,8 +87,19 @@ class AnnotationService:
                 # [核心适配] Refinery Material -> Annotation Schema
                 logger.info(f"Refinery Material found (ID: {material.id}). Injecting tracks...")
                 if material.dialogues:
+                    # [Debug] 检查源数据中的 ID
+                    sample_id = material.dialogues[0].get("id") if len(material.dialogues) > 0 else "Empty"
+                    logger.info(
+                        f"[AnnotationService] Loading {len(material.dialogues)} dialogues. Sample ID from Material: {sample_id}"  # noqa: E501
+                    )
                     media_anno.dialogues = AnnotationService._adapt_refinery_dialogues(material.dialogues)
+
                 if material.scenes:
+                    # [Debug] 检查源数据中的 ID
+                    sample_id = material.scenes[0].get("id") if len(material.scenes) > 0 else "Empty"
+                    logger.info(
+                        f"[AnnotationService] Loading {len(material.scenes)} scenes. Sample ID from Material: {sample_id}"  # noqa: E501
+                    )
                     media_anno.scenes = AnnotationService._adapt_refinery_scenes(material.scenes)
             else:
                 logger.warning("No Material data available. Job will start empty.")
@@ -144,6 +156,8 @@ class AnnotationService:
         # 3. 持久化 (调用 Job 的 A/B 轮转保存)
         job.rotate_and_save(data_dict, save_to_db=True)
 
+        # [Optional] 如果需要实时更新 RAG 数据，可以在这里调用 publish_job_artifacts(job)
+        # 但根据设计 "只在导出的时候生成数据"，建议在 complete_annotation 或 audit 时调用
         return annotation
 
     @staticmethod
@@ -206,6 +220,13 @@ class AnnotationService:
             # 兼容 Pydantic 对象或 Dict
             d_data = d.model_dump() if hasattr(d, "model_dump") else d
 
+            # [Debug] 捕获 ID 状态
+            incoming_id = d_data.get("id")
+            if not incoming_id:
+                logger.warning(
+                    f"[AnnotationService] Dialogue item missing ID! Content: {d_data.get('content', '')[:20]}..."
+                )
+
             items.append(
                 DialogueItem(
                     start=d_data.get("start_time", 0.0),
@@ -216,7 +237,8 @@ class AnnotationService:
                         original_text=d_data.get("content", ""),  # 暂用 content 作为 original
                     ),
                     context=ItemContext(
-                        id=str(uuid.uuid4()),
+                        # [Fix] 优先使用 Refinery 传入的 UUID，保持 SSOT 链路
+                        id=incoming_id or str(uuid.uuid4()),
                         origin=DataOrigin.AI_LLM,
                         is_verified=False,
                         ai_meta=AiMetadata(
@@ -248,6 +270,15 @@ class AnnotationService:
             else:
                 raw_type = str(raw_type_data) if raw_type_data else "unknown"
 
+            # [Fix] 优先使用 Refinery 传入的 UUID
+            incoming_id = s_data.get("id")
+            if not incoming_id:
+                logger.warning(
+                    f"[AnnotationService] Scene item missing ID! Action: {business_source.get('narrative_action', '')[:20]}..."  # noqa: E501
+                )
+
+            scene_id = incoming_id or str(uuid.uuid4())
+
             items.append(
                 SceneItem(
                     start=s_data.get("start_time", 0.0),
@@ -263,7 +294,7 @@ class AnnotationService:
                         character_dynamics=business_source.get("character_dynamics"),
                         description="",
                     ),
-                    context=ItemContext(id=str(uuid.uuid4()), origin=DataOrigin.AI_CV, is_verified=False),
+                    context=ItemContext(id=scene_id, origin=DataOrigin.AI_CV, is_verified=False),
                 )
             )
         return items
@@ -465,3 +496,134 @@ class AnnotationService:
         except Exception as e:
             logger.error(f"Generate Narrative Dataset failed for Project {project.id}: {e}", exc_info=True)
             raise e
+
+    @staticmethod
+    def publish_job_artifacts(job) -> None:
+        """
+        [Publish] 将 Workbench 的工程数据 (job.data) 发布为结构化数据。
+
+        职责：
+        1. 将 job.data (MediaAnnotation) 转换为扁平化的 dialogues/scenes/captions/highlights。
+        2. 从 Material 复制 frames 数据 (Snapshot)。
+        3. 保存到 AnnotationJob 的冗余字段中，供下游 RAG 使用。
+        """
+        if not job.data:
+            return
+
+        try:
+            # 1. 加载 Workbench 数据
+            media_anno = MediaAnnotation(**job.data)
+
+            # 2. 加载 Material 数据 (作为元数据补充源)
+            material_dialogues_map = {}
+            material_slices = []
+            material_frames = []
+
+            try:
+                from apps.atomflow.refinery.models import Material
+
+                # 加载必要字段
+                material = Material.objects.filter(media=job.media).first()
+
+                if material:
+                    if material.dialogues:
+                        material_dialogues_map = {d.get("id"): d for d in material.dialogues if d.get("id")}
+                    if material.slices:
+                        material_slices = material.slices
+                    if material.frames:
+                        material_frames = material.frames
+            except Exception as e:
+                logger.warning(f"Job {job.id}: Failed to load Material data: {e}")
+
+            # 3. 处理 Dialogues (智能合并)
+            new_dialogues = []
+            for i, d_item in enumerate(media_anno.dialogues):
+                d_id = d_item.context.id
+
+                # A. 基础数据 (来自 Workbench)
+                new_item = {
+                    "id": d_id,
+                    "index": i,
+                    "start_time": d_item.start,
+                    "end_time": d_item.end,
+                    "content": d_item.content.text,
+                    "speaker": d_item.content.speaker,
+                    "reasoning": d_item.context.ai_meta.reasoning if d_item.context.ai_meta else None,
+                }
+
+                # B. 补全元数据 (来自 Material)
+                # 如果 ID 一致，保留声纹分析等 AI 特征
+                if d_id in material_dialogues_map:
+                    mat_item = material_dialogues_map[d_id]
+                    if "audio_analysis" in mat_item:
+                        new_item["audio_analysis"] = mat_item["audio_analysis"]
+                    if "voice_mood" in mat_item:
+                        new_item["voice_mood"] = mat_item["voice_mood"]
+                    if "original_indices" in mat_item:
+                        new_item["original_indices"] = mat_item["original_indices"]
+
+                new_dialogues.append(new_item)
+
+            # 4. 处理 Slices (基于时间重构 Dialogue 引用)
+            # Slice 是物理切片，通常不变，但其包含的对白可能因时间调整而变化
+            new_slices = []
+            for s in material_slices:
+                s_copy = copy.deepcopy(s)
+                s_start = s_copy.get("start_time", 0)
+                s_end = s_copy.get("end_time", 0)
+
+                # 动态计算重叠的 Dialogues
+                matched_d_ids = []
+                for d in new_dialogues:
+                    # 判断时间重叠: max(start1, start2) < min(end1, end2)
+                    if max(s_start, d["start_time"]) < min(s_end, d["end_time"]):
+                        matched_d_ids.append(d["id"])
+
+                s_copy["dialogue_ids"] = matched_d_ids
+                new_slices.append(s_copy)
+
+            # 5. 处理 Scenes (基于时间重构 Slice 引用)
+            new_scenes = []
+            for i, s_item in enumerate(media_anno.scenes):
+                s_start = s_item.start
+                s_end = s_item.end
+
+                # 动态计算重叠的 Slices
+                matched_s_ids = []
+                for sl in new_slices:
+                    sl_start = sl.get("start_time", 0)
+                    sl_end = sl.get("end_time", 0)
+
+                    if max(s_start, sl_start) < min(s_end, sl_end):
+                        matched_s_ids.append(sl.get("id"))
+
+                new_scene = {
+                    "id": s_item.context.id,
+                    "index": i,
+                    "start_time": s_start,
+                    "end_time": s_end,
+                    "slice_ids": matched_s_ids,  # [New] 动态关联
+                    "content": s_item.content.model_dump(exclude_none=True),
+                }
+                new_scenes.append(new_scene)
+
+            # 6. 转换 Captions & Highlights
+            new_captions = [c.model_dump(exclude_none=True) for c in media_anno.captions]
+            new_highlights = [h.model_dump(exclude_none=True) for h in media_anno.highlights]
+
+            # 7. 复制 Frames (直接快照)
+            new_frames = material_frames
+
+            # 8. 落盘
+            job.dialogues = new_dialogues
+            job.scenes = new_scenes
+            job.captions = new_captions
+            job.highlights = new_highlights
+            job.frames = new_frames
+            job.slices = new_slices  # 使用更新了引用关系的 slices
+
+            job.save(update_fields=["dialogues", "scenes", "captions", "highlights", "frames", "slices"])
+            logger.info(f"Job {job.id}: Artifacts published for RAG.")
+
+        except Exception as e:
+            logger.error(f"Job {job.id}: Publish artifacts failed: {e}", exc_info=True)

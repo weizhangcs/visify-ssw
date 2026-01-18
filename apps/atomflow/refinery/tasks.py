@@ -81,6 +81,12 @@ def refinery_atomic_task(self, pipeline_id, seq, op_slug):
     except Exception as e:
         # 记录失败状态，传入 slug
         pipe_ctx.transit_state(seq, op_slug, "FAIL", error_msg=str(e))
+
+        # [Optimization] 如果是 413 (Payload Too Large) 或 400-499 客户端错误，重试无意义，直接抛出失败
+        error_str = str(e)
+        if "413" in error_str or "Client Error" in error_str:
+            raise e
+
         raise self.retry(exc=e)
 
 

@@ -8,8 +8,7 @@ from unfold.widgets import (
     UnfoldAdminTextInputWidget,
 )
 
-from apps.workflow.inference.projects import InferenceProject
-
+from ..annotation.projects import AnnotationProject
 from .models import CreativeProject
 
 
@@ -281,7 +280,8 @@ class BatchCreationForm(forms.Form):
 
     inference_project = forms.ModelChoiceField(
         # queryset=InferenceProject.objects.filter(status='COMPLETED'),  # 必须是已完成推理的项目
-        queryset=InferenceProject.objects.all(),
+        # queryset=InferenceProject.objects.all(),
+        queryset=AnnotationProject.objects.all(),  # 临时占位
         label="源推理项目 (Source)",
         required=True,
         widget=UnfoldAdminSelectWidget,

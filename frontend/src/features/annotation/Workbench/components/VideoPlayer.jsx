@@ -1,9 +1,11 @@
 import React, { forwardRef, useImperativeHandle, useRef, useEffect } from 'react';
+import Hls from 'hls.js';
 
 // [修改] 增加 subtitleUrl 属性
 const VideoPlayer = forwardRef(({ url, playing, onProgress, onDuration, onReady, onPlay, onPause, subtitleUrl }, ref) => {
     const videoRef = useRef(null);
     const lastLogTime = useRef(0);
+    const retryCount = useRef(0); // [Fix] 引入重试计数器
 
     useImperativeHandle(ref, () => ({
         seekTo: (seconds) => {
@@ -19,7 +21,72 @@ const VideoPlayer = forwardRef(({ url, playing, onProgress, onDuration, onReady,
 
     useEffect(() => {
         const video = videoRef.current;
+        if (!video || !url) return;
+
+        let hls = null;
+        const isHls = url.includes('.m3u8');
+
+        if (isHls && Hls.isSupported()) {
+            // [Fix] 集成 hls.js 以支持非 Safari 浏览器的 HLS 播放
+            hls = new Hls({
+                enableWorker: true,
+                lowLatencyMode: true,
+            });
+            hls.loadSource(url);
+            hls.attachMedia(video);
+            hls.on(Hls.Events.MANIFEST_PARSED, () => {
+                retryCount.current = 0; // [Fix] 加载成功后重置重试计数
+                if (playing) video.play().catch(e => console.error("[VideoPlayer] HLS Play Error:", e));
+            });
+
+            // [Fix] 添加 HLS 错误监听，便于排查 NetworkError / MediaError
+            hls.on(Hls.Events.ERROR, (event, data) => {
+                if (data.fatal) {
+                    console.error("[VideoPlayer] HLS Fatal Error:", data);
+                    switch (data.type) {
+                        case Hls.ErrorTypes.NETWORK_ERROR:
+                            // [Fix] 增加重试限制，防止死循环
+                            if (retryCount.current < 3) {
+                                retryCount.current++;
+                                console.warn(`[VideoPlayer] Network error, retrying (${retryCount.current}/3)...`);
+                                hls.startLoad();
+                            } else {
+                                console.error("[VideoPlayer] Network recovery failed. Stopping.");
+                                hls.destroy();
+                            }
+                            break;
+                        case Hls.ErrorTypes.MEDIA_ERROR:
+                            if (retryCount.current < 3) {
+                                retryCount.current++;
+                                console.warn(`[VideoPlayer] Media error, recovering (${retryCount.current}/3)...`);
+                                hls.recoverMediaError();
+                            } else {
+                                console.error("[VideoPlayer] Media recovery failed. Stopping.");
+                                hls.destroy();
+                            }
+                            break;
+                        default:
+                            hls.destroy();
+                            break;
+                    }
+                }
+            });
+        } else {
+            // 原生支持 (Safari) 或 普通 MP4
+            video.src = url;
+        }
+
+        return () => {
+            if (hls) {
+                hls.destroy();
+            }
+        };
+    }, [url]); // 仅当 URL 变化时重新加载
+
+    useEffect(() => {
+        const video = videoRef.current;
         if (!video) return;
+        
         if (playing && video.paused) {
             video.play().catch(e => console.error("[VideoPlayer] Play Error:", e));
         } else if (!playing && !video.paused) {
@@ -48,7 +115,7 @@ const VideoPlayer = forwardRef(({ url, playing, onProgress, onDuration, onReady,
         <div className="w-full h-full bg-black flex items-center justify-center overflow-hidden">
             <video
                 ref={videoRef}
-                src={url}
+                // src={url} // [Fix] 移除直接赋值，改由 useEffect 接管以支持 HLS
                 className="w-full h-full object-contain"
                 controls={true}
 

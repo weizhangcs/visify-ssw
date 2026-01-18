@@ -230,7 +230,7 @@ const ImportWizard = ({ context }) => {
                 )}
             </Card>
         </div>
-    );
+    )
 };
 
 export default ImportWizard;

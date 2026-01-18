@@ -1,4 +1,5 @@
 # Dockerfile.workbench
+# syntax=docker/dockerfile:1
 FROM crpi-34v4qt829vtet2cy.cn-hangzhou.personal.cr.aliyuncs.com/vss_base/python:3.12-slim
 
 # 1. 统一镜像源参数
@@ -9,6 +10,9 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     PIP_DISABLE_PIP_VERSION_CHECK=1 \
     PIP_NO_CACHE_DIR=1
+
+# [优化] 尽早创建用户
+RUN useradd -m appuser
 
 # 2. 系统依赖 (保持精简，但换源)
 RUN sed -i "s|deb.debian.org|$APT_MIRROR|g" /etc/apt/sources.list.d/debian.sources && \
@@ -29,9 +33,9 @@ RUN pip config set global.index-url $PIP_MIRROR_URL && \
 # 4. [防御性措施] 离线安装 PyTorch
 # 即使 Workbench 暂时不用 AI，加上这一步也不亏（因为只是读本地文件），
 # 但如果 requirements.base.txt 里万一混入了 AI 库，这一步能救命（避免下载 GPU 版）。
-COPY local_packages/ /tmp/packages/
-RUN pip install --no-cache-dir /tmp/packages/torch-*.whl /tmp/packages/torchvision-*.whl && \
-    rm -rf /tmp/packages
+# [优化] 使用挂载安装，不占用镜像空间
+RUN --mount=type=bind,source=local_packages,target=/tmp/packages \
+    pip install --no-cache-dir /tmp/packages/torch-*.whl /tmp/packages/torchvision-*.whl
 
 # 5. 安装基础依赖
 COPY requirements.base.txt .
@@ -41,11 +45,19 @@ RUN pip install --upgrade pip && \
 
 # [变更] 离线模式：将本地预下载的模型复制到镜像中
 # 对应 scripts/download_model.py 下载的目录
-COPY local_models /app/local_models
+# [优化] COPY --chown
+COPY --chown=appuser:appuser local_models /app/local_models
 
-COPY . .
+# [优化] 显式拷贝，避免重复拷贝 local_models
+COPY --chown=appuser:appuser manage.py .
+COPY --chown=appuser:appuser visify_ssw/ visify_ssw/
+COPY --chown=appuser:appuser apps/ apps/
+COPY --chown=appuser:appuser templates/ templates/
+COPY --chown=appuser:appuser staticfiles/ staticfiles/
+COPY --chown=appuser:appuser static_build/ static_build/
 
-RUN useradd -m appuser && chown -R appuser:appuser /app
+# 如果有其他目录(如 templates, static)请在此处添加
+
 USER appuser
 
 HEALTHCHECK --interval=30s --timeout=3s \

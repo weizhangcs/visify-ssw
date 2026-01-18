@@ -42,7 +42,8 @@ INSTALLED_APPS = [
     "apps.configuration.apps.ConfigurationConfig",
     "apps.workflow.apps.WorkflowConfig",
     "apps.atomflow.apps.AtomflowConfig",
-    "apps.inference",
+    # "apps.inference.apps.InferenceConfig",  # [Refactor] 已废弃/清空，移除以避免加载错误
+    "apps.vector",
     # --- APP REGISTRY END ---
     "corsheaders",
     "solo",
@@ -230,7 +231,7 @@ CELERY_IMPORTS = [
     "apps.media_assets.tasks",
     "apps.workflow.delivery.tasks",
     "apps.workflow.annotation.tasks",
-    "apps.workflow.inference.tasks",
+    # "apps.workflow.inference.tasks",
     "apps.workflow.creative.tasks",
     "apps.workflow.common.tasks",
 ]
@@ -293,7 +294,7 @@ CLOUD_API_KEY = getattr(DYNAMIC_SETTINGS, "cloud_api_key", None) or config("CLOU
 
 # 1. 获取 Django Admin 的实际公共访问 URL
 # 确保使用 PUBLIC_ENDPOINT 的 host/scheme 并强制使用 8000 端口
-ADMIN_PUBLIC_URL = config("PUBLIC_ENDPOINT", default="http://localhost").rstrip("/") + ":8000"
+ADMIN_PUBLIC_URL = config("PUBLIC_ENDPOINT", default="http://localhost").rstrip("/") + ":18000"
 
 # 2. CSRF/SESSION 安全修正 (防止在 HTTP 环境下 CSRF 失败)
 CSRF_COOKIE_SECURE = False
@@ -369,11 +370,12 @@ UNFOLD = {
                         "icon": "rate_review",
                         "link": reverse_lazy("admin:workflow_annotationproject_changelist"),
                     },
-                    {
-                        "title": "推理项目",
-                        "icon": "insights",
-                        "link": reverse_lazy("admin:workflow_inferenceproject_changelist"),
-                    },
+                    # [Refactor] 暂时屏蔽，待 RetrievalHub 重构完成后恢复或替换为 KnowledgeBase
+                    # {
+                    #     "title": "推理项目",
+                    #     "icon": "insights",
+                    #     "link": reverse_lazy("admin:workflow_inferenceproject_changelist"),
+                    # },
                 ],
             },
             {
@@ -392,6 +394,18 @@ UNFOLD = {
                 "separator": True,
                 "items": [
                     {"title": "分发任务", "icon": "send", "link": reverse_lazy("admin:workflow_deliveryjob_changelist")},
+                ],
+            },
+            {
+                "title": "基础设施",
+                "separator": True,
+                "items": [
+                    {"title": "向量索引资产", "icon": "memory", "link": reverse_lazy("admin:vector_vectorindex_changelist")},
+                    {
+                        "title": "待索引任务源",
+                        "icon": "source",
+                        "link": reverse_lazy("admin:vector_vectorsourcejob_changelist"),
+                    },
                 ],
             },
             {

@@ -40,7 +40,7 @@ TEMP_DIR="${OUTPUT_DIR}/${PACKAGE_NAME}"
 # 使用白名单模式，明确指定需要打包的文件/目录
 # 注意：这里保留 scripts 目录结构，不进行扁平化，以配合脚本内的相对路径逻辑
 FILES_TO_INCLUDE=(
-    "scripts"
+    "scripts/"
     "configs"
     ".env.template"
     "docker-compose.base.yml"

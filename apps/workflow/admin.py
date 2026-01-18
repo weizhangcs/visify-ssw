@@ -13,7 +13,6 @@
 from .annotation.admin import AnnotationProjectAdmin
 from .creative.admin import CreativeProjectAdmin
 from .delivery.admin import DeliveryJobAdmin
-from .inference.admin import InferenceProjectAdmin
 
 # 显式声明导出列表，既满足了 Flake8 的 F401 检查，
 # 也明确了该模块作为 "Admin Registry" 的职责。
@@ -21,6 +20,5 @@ __all__ = [
     "AnnotationProjectAdmin",
     "CreativeProjectAdmin",
     "DeliveryJobAdmin",
-    "InferenceProjectAdmin",
     "AnnotationProjectAdmin",
 ]

@@ -11,14 +11,10 @@ from .creative.models import CreativeProject
 # --- 从新的 delivery 子包导入 ---
 from .delivery.jobs import DeliveryJob
 
-# --- 从 inference 子包导入 ---
-from .inference.projects import InferenceProject
-
 __all__ = [
     "AnnotationJob",
     "AnnotationProject",
     "CreativeJob",
     "CreativeProject",
     "DeliveryJob",
-    "InferenceProject",
 ]

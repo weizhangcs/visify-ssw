@@ -5,7 +5,7 @@
 set -e
 
 # [关键] 切换到项目根目录 (因为脚本现在位于 scripts/ 子目录)
-cd "$(dirname "$0")/.." || exit 1
+#cd "$(dirname "$0")/.." || exit 1
 
 # 日志记录
 LOG_TIMESTAMP=$(date +"%Y%m%d_%H%M%S")
