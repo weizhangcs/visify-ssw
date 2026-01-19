@@ -354,11 +354,6 @@ UNFOLD = {
                         "icon": "precision_manufacturing",
                         "link": reverse_lazy("admin:atomflow_refineryatompipeline_changelist"),
                     },
-                    {
-                        "title": "转码配置",
-                        "icon": "tune",
-                        "link": reverse_lazy("admin:configuration_encodingprofile_changelist"),
-                    },
                 ],
             },
             {
@@ -369,6 +364,21 @@ UNFOLD = {
                         "title": "标注项目",
                         "icon": "rate_review",
                         "link": reverse_lazy("admin:workflow_annotationproject_changelist"),
+                    },
+                    {
+                        "title": "数据建模",
+                        "icon": "library_books",
+                        "link": reverse_lazy("admin:vector_vectorsourceasset_changelist"),
+                    },
+                    {
+                        "title": "模型列表",
+                        "icon": "memory",
+                        "link": reverse_lazy("admin:vector_vectorindex_changelist"),
+                    },
+                    {
+                        "title": "查询模型",
+                        "icon": "search",
+                        "link": reverse_lazy("vector:vector_search"),
                     },
                     # [Refactor] 暂时屏蔽，待 RetrievalHub 重构完成后恢复或替换为 KnowledgeBase
                     # {
@@ -397,18 +407,6 @@ UNFOLD = {
                 ],
             },
             {
-                "title": "基础设施",
-                "separator": True,
-                "items": [
-                    {"title": "向量索引资产", "icon": "memory", "link": reverse_lazy("admin:vector_vectorindex_changelist")},
-                    {
-                        "title": "待索引任务源",
-                        "icon": "source",
-                        "link": reverse_lazy("admin:vector_vectorsourcejob_changelist"),
-                    },
-                ],
-            },
-            {
                 "title": "系统设置",
                 "separator": True,
                 "items": [
@@ -416,6 +414,11 @@ UNFOLD = {
                         "title": "集成设置",
                         "link": reverse_lazy("admin:configuration_integrationsettings_changelist"),
                         "icon": "hub",
+                    },
+                    {
+                        "title": "转码配置",
+                        "icon": "tune",
+                        "link": reverse_lazy("admin:configuration_encodingprofile_changelist"),
                     },
                     {"title": "用户", "link": reverse_lazy("admin:auth_user_changelist"), "icon": "group"},
                     {"title": "用户组", "link": reverse_lazy("admin:auth_group_changelist"), "icon": "groups"},

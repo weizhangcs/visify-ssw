@@ -10,6 +10,7 @@ urlpatterns = [
     path("admin/", admin.site.urls),
     # path('integrations/ls/', include('apps.media_assets.urls', namespace='media_assets')),
     path("workflow/", include("apps.workflow.urls", namespace="workflow")),
+    path("vector/", include("apps.vector.urls", namespace="vector")),
 ]
 
 # --- [关键修复] 为开发环境提供静态和媒体文件服务 ---

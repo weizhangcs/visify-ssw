@@ -3,7 +3,7 @@
 from django.db import models
 from model_utils.models import TimeStampedModel
 
-from apps.workflow.annotation.jobs import AnnotationJob
+from apps.media_assets.models import Asset
 
 
 class VectorIndex(TimeStampedModel):
@@ -41,13 +41,13 @@ class VectorIndex(TimeStampedModel):
         return f"Index({self.index_type}) for {self.target_id} [{self.vector_count}]"
 
 
-class VectorSourceJob(AnnotationJob):
+class VectorSourceAsset(Asset):
     """
-    [Proxy Model] 待索引的标注任务。
-    用于在 Vector Admin 中直接选择 AnnotationJob 并触发索引构建，而不侵入 Workflow 代码。
+    [Proxy Model] 待索引资产 (Asset)。
+    用于在 Vector Admin 中以 Asset 为维度构建全集索引。
     """
 
     class Meta:
         proxy = True
-        verbose_name = "待索引标注任务"
-        verbose_name_plural = "待索引标注任务"
+        verbose_name = "待索引资产 (Asset)"
+        verbose_name_plural = "待索引资产 (Asset)"

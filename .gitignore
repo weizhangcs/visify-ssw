@@ -45,7 +45,6 @@ htmlcov/
 /static_build/
 /frontend/node_modules/
 /tests/testdata/
-/doc/
 /local_models/
 /local_packages/
 dist/

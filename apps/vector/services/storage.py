@@ -102,7 +102,7 @@ class VectorStorageService:
 
             if idx < len(metadata):
                 item = metadata[idx].copy()
-                item["_score"] = float(D[0][rank])
+                item["score"] = float(D[0][rank])
                 results.append(item)
 
         return results

@@ -26,7 +26,7 @@ class RefineryAsyncTester:
         :param task_obj: Celery Task 对象 (例如 refinery_transcode_task)
         :param timeout: 最大等待时间（秒）
         """
-        from apps.refinery.models import Material
+        from apps.atomflow.refinery.models import Material
 
         print(f"\n🚀 [Async Test] Dispatching {task_obj.name} for ID: {material_id}")
 

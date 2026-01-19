@@ -49,7 +49,8 @@ class EmbeddingService:
                 model_path = cls.MODEL_NAME
 
             logger.info(f"Loading Embedding Model from: {model_path}")
-            cls._model_instance = SentenceTransformer(model_path)
+            # [Fix] 传递 tokenizer_kwargs 以修复 Mistral regex warning
+            cls._model_instance = SentenceTransformer(model_path, tokenizer_kwargs={"fix_mistral_regex": True})
         return cls._model_instance
 
     @classmethod

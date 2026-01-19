@@ -1,8 +1,8 @@
 import React, { forwardRef, useImperativeHandle, useRef, useEffect } from 'react';
 import Hls from 'hls.js';
 
-// [修改] 增加 subtitleUrl 属性
-const VideoPlayer = forwardRef(({ url, playing, onProgress, onDuration, onReady, onPlay, onPause, subtitleUrl }, ref) => {
+// [修改] 增加 subtitleUrl 属性, 增加 controls 属性 (默认为 true)
+const VideoPlayer = forwardRef(({ url, playing, onProgress, onDuration, onReady, onPlay, onPause, subtitleUrl, controls = true }, ref) => {
     const videoRef = useRef(null);
     const lastLogTime = useRef(0);
     const retryCount = useRef(0); // [Fix] 引入重试计数器
@@ -86,7 +86,7 @@ const VideoPlayer = forwardRef(({ url, playing, onProgress, onDuration, onReady,
     useEffect(() => {
         const video = videoRef.current;
         if (!video) return;
-        
+
         if (playing && video.paused) {
             video.play().catch(e => console.error("[VideoPlayer] Play Error:", e));
         } else if (!playing && !video.paused) {
@@ -117,7 +117,7 @@ const VideoPlayer = forwardRef(({ url, playing, onProgress, onDuration, onReady,
                 ref={videoRef}
                 // src={url} // [Fix] 移除直接赋值，改由 useEffect 接管以支持 HLS
                 className="w-full h-full object-contain"
-                controls={true}
+                controls={controls}
 
                 onPlay={() => { if (onPlay) onPlay(); }}
                 onPause={() => { if (onPause) onPause(); }}

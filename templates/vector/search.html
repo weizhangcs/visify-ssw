@@ -1,0 +1,17 @@
+{% extends "unfold/layouts/base.html" %}
+{% load static %}
+
+{% block content %}
+<!-- React 挂载点 -->
+<div id="react-root-vector-lab"></div>
+
+<!-- 注入后端数据 -->
+<script>
+    window.SERVER_CONTEXT = {
+        assets: {{ assets|safe }},
+    };
+</script>
+
+<!-- 加载 React Bundle -->
+<script type="module" src="{% static 'js/bundles/vector-lab.js' %}"></script>
+{% endblock %}

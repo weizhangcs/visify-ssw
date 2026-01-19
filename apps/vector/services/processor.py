@@ -1,8 +1,13 @@
 # 文件路径: apps/vector/services/processor.py
 
 import json
+import logging
 from pathlib import Path
 from typing import Any, Dict, Optional
+
+from apps.atomflow.refinery.schemas import Slice, VisualAnalysis
+
+logger = logging.getLogger(__name__)
 
 
 class DataProcessorService:
@@ -59,6 +64,7 @@ class DataProcessorService:
     def _extract_scene(item: Dict) -> str:
         config = DataProcessorService._get_config("scene")
         sep = config.get("separator", "；")
+        kv_sep = config.get("kv_separator", "：")
 
         content = item.get("content", {})
         parts = []
@@ -66,19 +72,42 @@ class DataProcessorService:
         # 核心剧情
         if content.get("narrative_action"):
             label = config.get("narrative_action", "剧情")
-            parts.append(f"{label}{sep}{content['narrative_action']}")
+            parts.append(f"{label}{kv_sep}{content['narrative_action']}")
 
         # 环境信息
         if content.get("location"):
             label = config.get("location", "地点")
-            parts.append(f"{label}{sep}{content['location']}")
+            parts.append(f"{label}{kv_sep}{content['location']}")
+
+        # [新增] 场景类型 (支持 LabelValue 结构或字符串)
+        scene_type = content.get("scene_type")
+        if scene_type:
+            label = config.get("scene_type", "类型")
+            val = None
+            if isinstance(scene_type, dict):
+                val = scene_type.get("label") or scene_type.get("value")
+            elif isinstance(scene_type, str):
+                val = scene_type
+
+            if val and val.lower() != "unknown":
+                parts.append(f"{label}{kv_sep}{val}")
+
+        # [新增] 运镜逻辑
+        if content.get("camera_logic"):
+            label = config.get("camera_logic", "运镜")
+            parts.append(f"{label}{kv_sep}{content['camera_logic']}")
+
+        # [新增] 角色关系
+        if content.get("character_dynamics"):
+            label = config.get("character_dynamics", "关系")
+            parts.append(f"{label}{kv_sep}{content['character_dynamics']}")
 
         # 氛围标签
         if content.get("visual_mood_tags"):
             tags = content["visual_mood_tags"]
-            if isinstance(tags, list):
+            if isinstance(tags, list) and tags:
                 label = config.get("visual_mood_tags", "氛围")
-                parts.append(f"{label}{sep}{'、'.join(tags)}")
+                parts.append(f"{label}{kv_sep}{'、'.join(tags)}")
 
         return sep.join(parts)
 
@@ -86,17 +115,45 @@ class DataProcessorService:
     def _extract_slice(item: Dict) -> str:
         config = DataProcessorService._get_config("slice")
         sep = config.get("separator", "；")
+        kv_sep = config.get("kv_separator", "：")
 
-        analysis = item.get("slice_analysis") or {}
+        # [Re-hydration] 尝试恢复 Pydantic 对象
+        # [Fix] 兼容性处理：如果 type 退化为字符串 (e.g. "visual_segment")
+        if isinstance(item.get("type"), str):
+            val = item["type"]
+            item = item.copy()
+            item["type"] = {"value": val, "label": val}
+
+        try:
+            slice_obj = Slice(**item)
+        except Exception as e:
+            logger.warning(f"Slice validation failed: {e}")
+            return ""
+
         parts = []
 
-        if analysis.get("visual_summary"):
-            label = config.get("visual_summary", "画面")
-            parts.append(f"{label}{sep}{analysis['visual_summary']}")
+        # 1. 类型 (Type)
+        if slice_obj.type:
+            label = config.get("type", "类型")
+            val = slice_obj.type.label or slice_obj.type.value
+            parts.append(f"{label}{kv_sep}{val}")
 
-        if analysis.get("narrative_summary"):
-            label = config.get("narrative_summary", "剧情")
-            parts.append(f"{label}{sep}{analysis['narrative_summary']}")
+        analysis = slice_obj.slice_analysis
+        if analysis:
+            # 2. 画面 (Visual)
+            if analysis.visual_summary:
+                label = config.get("visual_summary", "画面")
+                parts.append(f"{label}{kv_sep}{analysis.visual_summary}")
+
+            # 3. 剧情 (Narrative)
+            if analysis.narrative_summary:
+                label = config.get("narrative_summary", "剧情")
+                parts.append(f"{label}{kv_sep}{analysis.narrative_summary}")
+
+            # 4. 标签 (Tags)
+            if analysis.tags:
+                label = config.get("tags", "标签")
+                parts.append(f"{label}{kv_sep}{'、'.join(analysis.tags)}")
 
         return sep.join(parts)
 
@@ -104,42 +161,49 @@ class DataProcessorService:
     def _extract_frame(item: Dict) -> str:
         config = DataProcessorService._get_config("frame")
         sep = config.get("separator", "；")
+        kv_sep = config.get("kv_separator", "：")
 
-        va = item.get("visual_analysis") or {}
+        raw_va = item.get("visual_analysis") or {}
+
+        # [Re-hydration] 尝试恢复 Pydantic 对象
+        # [Fix] 兼容性处理：如果 shot_type 退化为字符串
+        if isinstance(raw_va.get("shot_type"), str):
+            val = raw_va["shot_type"]
+            raw_va = raw_va.copy()
+            raw_va["shot_type"] = {"value": val, "label": val}
+
+        try:
+            va_obj = VisualAnalysis(**raw_va)
+        except Exception as e:
+            logger.warning(f"Frame validation failed: {e}")
+            return ""
+
         parts = []
 
-        if va.get("subject"):
+        if va_obj.subject:
             label = config.get("subject", "主体")
-            parts.append(f"{label}{sep}{va['subject']}")
+            parts.append(f"{label}{kv_sep}{va_obj.subject}")
 
-        if va.get("action"):
+        if va_obj.action:
             label = config.get("action", "动作")
-            parts.append(f"{label}{sep}{va['action']}")
+            parts.append(f"{label}{kv_sep}{va_obj.action}")
 
-        if va.get("environment"):
+        if va_obj.environment:
             label = config.get("environment", "环境")
-            parts.append(f"{label}{sep}{va['environment']}")
+            parts.append(f"{label}{kv_sep}{va_obj.environment}")
 
         # 补充其他字段 (Shot, Lighting, Mood)
-        shot_type = va.get("shot_type")
-        if shot_type:
+        if va_obj.shot_type:
             label = config.get("shot_type", "景别")
-            val = None
-            if isinstance(shot_type, dict):
-                val = shot_type.get("label") or shot_type.get("value")
-            elif isinstance(shot_type, str):
-                val = shot_type
-            if val:
-                parts.append(f"{label}{sep}{val}")
+            val = va_obj.shot_type.label or va_obj.shot_type.value
+            parts.append(f"{label}{kv_sep}{val}")
 
-        if va.get("lighting_time"):
+        if va_obj.lighting_time:
             label = config.get("lighting_time", "光影")
-            parts.append(f"{label}{sep}{va['lighting_time']}")
+            parts.append(f"{label}{kv_sep}{va_obj.lighting_time}")
 
-        if va.get("visual_mood_tags"):
-            tags = va["visual_mood_tags"]
-            if isinstance(tags, list) and tags:
-                label = config.get("visual_mood_tags", "氛围")
-                parts.append(f"{label}{sep}{'、'.join(tags)}")
+        if va_obj.visual_mood_tags:
+            label = config.get("visual_mood_tags", "氛围")
+            parts.append(f"{label}{kv_sep}{'、'.join(va_obj.visual_mood_tags)}")
 
         return sep.join(parts)

@@ -6,6 +6,7 @@
     "shot_type": "景别",
     "lighting_time": "光影",
     "visual_mood_tags": "氛围",
-    "separator": "；"
+    "separator": "；",
+    "kv_separator": "："
   }
 }

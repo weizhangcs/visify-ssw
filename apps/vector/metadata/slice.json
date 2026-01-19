@@ -1,7 +1,10 @@
 {
   "zh": {
+    "type": "类型",
     "visual_summary": "画面",
     "narrative_summary": "剧情",
-    "separator": "；"
+    "tags": "标签",
+    "separator": "；",
+    "kv_separator": "："
   }
 }

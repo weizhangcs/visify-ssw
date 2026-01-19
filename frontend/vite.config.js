@@ -23,6 +23,8 @@ export default defineConfig({
                 'annotation-workbench': path.resolve(__dirname, 'src/entries/annotation_workbench.jsx'),
                 // [新增] 场景编排入口
                 'scene-orchestration': path.resolve(__dirname, 'src/entries/scene_orchestration.jsx'),
+                // [新增] 向量检索实验室
+                'vector-lab': path.resolve(__dirname, 'src/entries/vector_lab.jsx'),
             },
             output: {
                 entryFileNames: 'js/bundles/[name].js',

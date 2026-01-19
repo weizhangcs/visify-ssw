@@ -62,6 +62,7 @@ class VectorIndexerService:
                     "start": item.get("start_time") or item.get("timestamp", 0),
                     "end": item.get("end_time", 0),
                     "text_preview": text[:100],
+                    "seq": item.get("sequence", 1),  # [New] 注入集数/序号，默认为 1
                 }
                 metadata.append(meta)
 
