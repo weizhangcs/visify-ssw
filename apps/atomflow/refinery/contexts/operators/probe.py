@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from apps.atomflow.refinery.schemas import TechMeta
+from apps.common.schemas.dataset.schemas import TechMeta
 
 
 class ProbeContextMixin:

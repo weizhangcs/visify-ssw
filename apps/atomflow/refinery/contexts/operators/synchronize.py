@@ -2,7 +2,7 @@ import copy
 from pathlib import Path
 from typing import Dict
 
-from apps.atomflow.refinery.schemas import KeyframeItem
+from apps.common.schemas.dataset.schemas import KeyframeItem
 
 
 class SynchronizeContextMixin:

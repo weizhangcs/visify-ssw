@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from apps.atomflow.refinery.schemas import Slice
+from apps.common.schemas.dataset.schemas import Slice
 
 
 class SliceContextMixin:

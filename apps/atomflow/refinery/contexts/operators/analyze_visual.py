@@ -1,6 +1,6 @@
 import logging
 
-from apps.atomflow.refinery.schemas import VisualAnalysis
+from apps.common.schemas.dataset.schemas import VisualAnalysis
 
 logger = logging.getLogger(__name__)
 

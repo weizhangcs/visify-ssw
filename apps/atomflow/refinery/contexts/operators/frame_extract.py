@@ -1,7 +1,7 @@
 from pathlib import Path
 from typing import Dict, List
 
-from apps.atomflow.refinery.schemas import KeyframeItem
+from apps.common.schemas.dataset.schemas import KeyframeItem
 
 
 class FrameExtractContextMixin:
