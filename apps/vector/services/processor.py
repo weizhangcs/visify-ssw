@@ -5,7 +5,7 @@ import logging
 from pathlib import Path
 from typing import Any, Dict, Optional
 
-from apps.atomflow.refinery.schemas import Slice, VisualAnalysis
+from apps.common.schemas.dataset.schemas import Scene, Slice, SubtitleItem, VisualAnalysis
 
 logger = logging.getLogger(__name__)
 
@@ -51,63 +51,80 @@ class DataProcessorService:
 
     @staticmethod
     def _extract_dialogue(item: Dict) -> str:
+        # [SSOT] 强制转换为 Pydantic 对象
+        try:
+            obj = SubtitleItem(**item)
+        except Exception as e:
+            logger.warning(f"Dialogue validation failed: {e}")
+            return ""
+
         config = DataProcessorService._get_config("dialogue")
         sep = config.get("separator", "：")
 
-        speaker = item.get("speaker", "Unknown")
-        content = item.get("content", "")
-        if not content:
+        if not obj.content:
             return ""
-        return f"{speaker}{sep}{content}"
+        return f"{obj.speaker}{sep}{obj.content}"
 
     @staticmethod
     def _extract_scene(item: Dict) -> str:
+        # [Compatibility] 兼容旧数据：如果 scene_type 是字符串，临时修正为 LabelValue 结构
+        # 以便通过 Pydantic 校验
+        content_dict = item.get("content", {})
+        if isinstance(content_dict, dict):
+            st = content_dict.get("scene_type")
+            if isinstance(st, str):
+                # 这是一个临时补丁，防止旧数据导致索引构建失败
+                item = item.copy()
+                item["content"] = content_dict.copy()
+                item["content"]["scene_type"] = {"value": st, "label": st}
+
+        # [SSOT] 强制转换为 Pydantic 对象
+        try:
+            scene_obj = Scene(**item)
+        except Exception as e:
+            logger.warning(f"Scene validation failed: {e}")
+            return ""
+
         config = DataProcessorService._get_config("scene")
         sep = config.get("separator", "；")
         kv_sep = config.get("kv_separator", "：")
 
-        content = item.get("content", {})
+        content = scene_obj.content
         parts = []
 
         # 核心剧情
-        if content.get("narrative_action"):
+        if content.narrative_action:
             label = config.get("narrative_action", "剧情")
-            parts.append(f"{label}{kv_sep}{content['narrative_action']}")
+            parts.append(f"{label}{kv_sep}{content.narrative_action}")
 
         # 环境信息
-        if content.get("location"):
+        if content.location:
             label = config.get("location", "地点")
-            parts.append(f"{label}{kv_sep}{content['location']}")
+            parts.append(f"{label}{kv_sep}{content.location}")
 
         # [新增] 场景类型 (支持 LabelValue 结构或字符串)
-        scene_type = content.get("scene_type")
+        scene_type = content.scene_type
         if scene_type:
             label = config.get("scene_type", "类型")
-            val = None
-            if isinstance(scene_type, dict):
-                val = scene_type.get("label") or scene_type.get("value")
-            elif isinstance(scene_type, str):
-                val = scene_type
-
+            # Pydantic 对象属性访问
+            val = scene_type.label or scene_type.value
             if val and val.lower() != "unknown":
                 parts.append(f"{label}{kv_sep}{val}")
 
         # [新增] 运镜逻辑
-        if content.get("camera_logic"):
+        if content.camera_logic:
             label = config.get("camera_logic", "运镜")
-            parts.append(f"{label}{kv_sep}{content['camera_logic']}")
+            parts.append(f"{label}{kv_sep}{content.camera_logic}")
 
         # [新增] 角色关系
-        if content.get("character_dynamics"):
+        if content.character_dynamics:
             label = config.get("character_dynamics", "关系")
-            parts.append(f"{label}{kv_sep}{content['character_dynamics']}")
+            parts.append(f"{label}{kv_sep}{content.character_dynamics}")
 
         # 氛围标签
-        if content.get("visual_mood_tags"):
-            tags = content["visual_mood_tags"]
-            if isinstance(tags, list) and tags:
-                label = config.get("visual_mood_tags", "氛围")
-                parts.append(f"{label}{kv_sep}{'、'.join(tags)}")
+        if content.visual_mood_tags:
+            label = config.get("visual_mood_tags", "氛围")
+            parts.append(f"{label}{kv_sep}{'、'.join(content.visual_mood_tags)}")
 
         return sep.join(parts)
 

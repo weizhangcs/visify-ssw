@@ -7,15 +7,10 @@ from typing import Any, List
 
 from django.conf import settings
 
-from apps.common.schemas.annotation.workbench import AiMetadata, DataOrigin, DialogueContent, DialogueItem  # noqa: F401
-from apps.common.schemas.annotation.workbench import HighlightType as WbHighlightType  # noqa: F401
-from apps.common.schemas.annotation.workbench import (  # noqa: F401
-    ItemContext,
-    MediaAnnotation,
-    SceneContent,
-    SceneItem,
-    SceneType,
-)
+from apps.common.schemas.dataset.schemas import Scene as CoreScene
+from apps.common.schemas.dataset.schemas import SceneContent as CoreSceneContent
+from apps.common.schemas.dataset.schemas import SceneTypeLabel as CoreSceneTypeLabel
+from apps.common.schemas.dataset.schemas import SubtitleItem as CoreSubtitleItem
 from apps.common.schemas.narrative_dataset import CaptionItem as CommonCaptionItem
 from apps.common.schemas.narrative_dataset import DialogueItem as CommonDialogueItem
 from apps.common.schemas.narrative_dataset import HighlightItem as CommonHighlightItem
@@ -26,6 +21,15 @@ from apps.common.schemas.narrative_dataset import (
     NarrativeScene,
     ProjectMetadata,
     SceneContentType,
+)
+from apps.workflow.annotation.schemas import AiMetadata, DataOrigin, DialogueContent, DialogueItem  # noqa: F401
+from apps.workflow.annotation.schemas import HighlightType as WbHighlightType  # noqa: F401
+from apps.workflow.annotation.schemas import (  # noqa: F401
+    ItemContext,
+    MediaAnnotation,
+    SceneContent,
+    SceneItem,
+    SceneType,
 )
 
 logger = logging.getLogger(__name__)
@@ -541,7 +545,7 @@ class AnnotationService:
                 d_id = d_item.context.id
 
                 # A. 基础数据 (来自 Workbench)
-                new_item = {
+                core_data = {
                     "id": d_id,
                     "index": i,
                     "start_time": d_item.start,
@@ -555,14 +559,15 @@ class AnnotationService:
                 # 如果 ID 一致，保留声纹分析等 AI 特征
                 if d_id in material_dialogues_map:
                     mat_item = material_dialogues_map[d_id]
-                    if "audio_analysis" in mat_item:
-                        new_item["audio_analysis"] = mat_item["audio_analysis"]
-                    if "voice_mood" in mat_item:
-                        new_item["voice_mood"] = mat_item["voice_mood"]
-                    if "original_indices" in mat_item:
-                        new_item["original_indices"] = mat_item["original_indices"]
+                    # 动态复制 Core Schema 支持的额外字段
+                    for field in ["audio_analysis", "voice_mood", "original_indices"]:
+                        if field in mat_item:
+                            core_data[field] = mat_item[field]
 
-                new_dialogues.append(new_item)
+                # [ACL Validation] 强制使用 Core Schema 进行校验和清洗
+                # 这会自动处理类型转换，并确保落库数据符合契约
+                core_obj = CoreSubtitleItem(**core_data)
+                new_dialogues.append(core_obj.model_dump(exclude_none=True))
 
             # 4. 处理 Slices (基于时间重构 Dialogue 引用)
             # Slice 是物理切片，通常不变，但其包含的对白可能因时间调整而变化
@@ -597,15 +602,35 @@ class AnnotationService:
                     if max(s_start, sl_start) < min(s_end, sl_end):
                         matched_s_ids.append(sl.get("id"))
 
-                new_scene = {
-                    "id": s_item.context.id,
-                    "index": i,
-                    "start_time": s_start,
-                    "end_time": s_end,
-                    "slice_ids": matched_s_ids,  # [New] 动态关联
-                    "content": s_item.content.model_dump(exclude_none=True),
-                }
-                new_scenes.append(new_scene)
+                # [ACL Transformation] Workbench (Enum) -> Core (LabelValue)
+                wb_type = s_item.content.scene_type
+                core_scene_type = None
+                if wb_type:
+                    # 处理 TextChoices 或 纯字符串
+                    val = wb_type.value if hasattr(wb_type, "value") else str(wb_type)
+                    label = getattr(wb_type, "label", val)
+                    core_scene_type = CoreSceneTypeLabel(value=val, label=label)
+
+                # [ACL Validation] 构建 Core Scene 对象
+                core_content = CoreSceneContent(
+                    narrative_action=s_item.content.narrative_action,
+                    location=s_item.content.location,
+                    scene_type=core_scene_type,
+                    visual_mood_tags=s_item.content.visual_mood_tags,
+                    camera_logic=s_item.content.camera_logic,
+                    character_dynamics=s_item.content.character_dynamics,
+                    reason=s_item.content.reason,
+                )
+
+                core_scene = CoreScene(
+                    id=s_item.context.id,
+                    index=i,
+                    start_time=s_start,
+                    end_time=s_end,
+                    content=core_content,
+                    slice_ids=matched_s_ids,
+                )
+                new_scenes.append(core_scene.model_dump(exclude_none=True))
 
             # 6. 转换 Captions & Highlights
             new_captions = [c.model_dump(exclude_none=True) for c in media_anno.captions]

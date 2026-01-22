@@ -1,6 +1,7 @@
 import logging
+import uuid
 
-from apps.atomflow.refinery.schemas import Scene, SceneContent
+from apps.common.schemas.dataset.schemas import Scene, SceneContent, SceneTypeLabel
 
 logger = logging.getLogger(__name__)
 
@@ -48,25 +49,47 @@ class RegroupSliceContextMixin:
         if not scenes_data:
             return
 
-            # [Adapter] Cloud returns scene_type as {"value": "...", "label": "..."}
-            # Local Schema SceneContent.scene_type is now LabelItem, so it matches.
-            # But we need to ensure Pydantic validation passes.
-
         validated_scenes = []
-        for s in scenes_data:
+        for i, s_data in enumerate(scenes_data):
             try:
-                # [Adapter] Cloud returns 'scene_id' (int), map to Local 'index'
-                # VSS Cloud 返回的是 scene_id (int)，对应本地的 index
-                if "scene_id" in s and "index" not in s:
-                    s["index"] = s["scene_id"]
+                # [SSOT Adaptation] Payload DTO (Dict) -> Core Domain Model (Pydantic)
+                # 目标：确保写入 Material 的数据严格符合 apps.common.schemas.dataset.schemas.Scene
 
-                # Ensure content is validated against SceneContent
-                content_obj = SceneContent(**s["content"])
-                s["content"] = content_obj.model_dump()
-                scene_obj = Scene(**s)
-                validated_scenes.append(scene_obj.model_dump())
+                content_data = s_data.get("content", {})
+
+                # 1. 适配 SceneType (Payload LabelValue -> Core SceneTypeLabel)
+                st_payload = content_data.get("scene_type")
+                st_core = None
+                if isinstance(st_payload, dict):
+                    st_core = SceneTypeLabel(value=st_payload.get("value"), label=st_payload.get("label"))
+
+                # 2. 构建 Core Content
+                core_content = SceneContent(
+                    narrative_action=content_data.get("narrative_action"),
+                    location=content_data.get("location"),
+                    scene_type=st_core,
+                    visual_mood_tags=content_data.get("visual_mood_tags", []),
+                    camera_logic=content_data.get("camera_logic"),
+                    character_dynamics=content_data.get("character_dynamics"),
+                    reason=content_data.get("reason"),
+                )
+
+                # 3. 构建 Core Scene (生成 UUID, 映射 index)
+                # Payload 'scene_id' 对应 Core 'index'
+                idx = s_data.get("scene_id", i)
+
+                core_scene = Scene(
+                    id=str(uuid.uuid4()),
+                    index=idx,
+                    start_time=s_data.get("start_time"),
+                    end_time=s_data.get("end_time"),
+                    content=core_content,
+                    slice_ids=s_data.get("slice_ids", []),
+                )
+
+                validated_scenes.append(core_scene.model_dump())
             except Exception as e:
-                logger.warning(f"Failed to validate scene {s.get('scene_id')}: {e}")
+                logger.warning(f"Failed to adapt scene index {i}: {e}")
 
         target.scenes = validated_scenes
 

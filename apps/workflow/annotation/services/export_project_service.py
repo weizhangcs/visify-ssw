@@ -5,7 +5,7 @@ from datetime import datetime
 
 from django.core.files.base import ContentFile
 
-from apps.common.schemas.annotation.workbench import ProjectAnnotation
+from apps.workflow.annotation.schemas import ProjectAnnotation
 
 from .annotation_service import AnnotationService
 

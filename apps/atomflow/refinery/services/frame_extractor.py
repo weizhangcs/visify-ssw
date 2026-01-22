@@ -8,7 +8,7 @@ import uuid
 from pathlib import Path
 from typing import Dict, List, Tuple
 
-from apps.atomflow.refinery.schemas import KeyframeItem, Slice
+from apps.common.schemas.dataset.schemas import KeyframeItem, Slice
 
 logger = logging.getLogger(__name__)
 

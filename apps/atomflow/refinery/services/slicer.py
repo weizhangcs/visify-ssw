@@ -6,7 +6,8 @@ import uuid
 from pathlib import Path
 from typing import Dict, List
 
-from apps.atomflow.refinery.schemas import Slice, SliceType
+from apps.common.schemas.dataset.enums import SliceType
+from apps.common.schemas.dataset.schemas import Slice
 
 logger = logging.getLogger(__name__)
 

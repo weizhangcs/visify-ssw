@@ -5,6 +5,11 @@ from django.db import models
 from django.utils.translation import gettext_lazy as _
 from pydantic import BaseModel, Field
 
+from apps.common.schemas.dataset.enums import DataOrigin as CoreDataOrigin
+from apps.common.schemas.dataset.enums import HighlightMood as CoreHighlightMood
+from apps.common.schemas.dataset.enums import HighlightType as CoreHighlightType
+from apps.common.schemas.dataset.enums import SceneType as CoreSceneType
+
 # =============================================================================
 # 1. 核心枚举 (Core Enums) - 对齐上游 & i18n
 # =============================================================================
@@ -16,48 +21,48 @@ class SceneType(models.TextChoices):
     严格对齐 Cloud 端 ScenePreAnnotator 的 Enum 定义
     """
 
-    DIALOGUE = "dialogue", _("对话场")
-    ACTION = "action", _("动作场")
-    MONTAGE = "montage", _("蒙太奇")
-    ESTABLISHING = "establishing", _("建立场")
-    EMOTIONAL = "emotional", _("情绪场")
-    UNKNOWN = "unknown", _("未知")
+    DIALOGUE = CoreSceneType.DIALOGUE.value, _("对话场")
+    ACTION = CoreSceneType.ACTION.value, _("动作场")
+    MONTAGE = CoreSceneType.MONTAGE.value, _("蒙太奇")
+    ESTABLISHING = CoreSceneType.ESTABLISHING.value, _("建立场")
+    EMOTIONAL = CoreSceneType.EMOTIONAL.value, _("情绪场")
+    UNKNOWN = CoreSceneType.UNKNOWN.value, _("未知")
 
 
 class HighlightType(models.TextChoices):
     """[高光类型]"""
 
-    ACTION = "Action", _("动作片段")
-    EMOTIONAL = "Emotional", _("情感片段")
-    DIALOGUE = "Dialogue", _("对话片段")
-    SUSPENSE = "Suspense", _("悬念片段")
-    INFORMATION = "Information", _("信息片段")
-    HUMOR = "Humor", _("幽默片段")
-    OTHER = "Other", _("其他")
+    ACTION = CoreHighlightType.ACTION.value, _("动作片段")
+    EMOTIONAL = CoreHighlightType.EMOTIONAL.value, _("情感片段")
+    DIALOGUE = CoreHighlightType.DIALOGUE.value, _("对话片段")
+    SUSPENSE = CoreHighlightType.SUSPENSE.value, _("悬念片段")
+    INFORMATION = CoreHighlightType.INFORMATION.value, _("信息片段")
+    HUMOR = CoreHighlightType.HUMOR.value, _("幽默片段")
+    OTHER = CoreHighlightType.OTHER.value, _("其他")
 
 
 class HighlightMood(models.TextChoices):
     """[高光情绪]"""
 
-    EXCITING = "Exciting", _("燃")
-    SATISFYING = "Satisfying", _("爽")
-    HEART_WRENCHING = "Heart-wrenching", _("虐")
-    SWEET = "Sweet", _("甜")
-    HILARIOUS = "Hilarious", _("爆笑")
-    TERRIFYING = "Terrifying", _("恐怖")
-    HEALING = "Healing", _("治愈")
-    TOUCHING = "Touching", _("感动")
-    TENSE = "Tense", _("紧张")
+    EXCITING = CoreHighlightMood.EXCITING.value, _("燃")
+    SATISFYING = CoreHighlightMood.SATISFYING.value, _("爽")
+    HEART_WRENCHING = CoreHighlightMood.HEART_WRENCHING.value, _("虐")
+    SWEET = CoreHighlightMood.SWEET.value, _("甜")
+    HILARIOUS = CoreHighlightMood.HILARIOUS.value, _("爆笑")
+    TERRIFYING = CoreHighlightMood.TERRIFYING.value, _("恐怖")
+    HEALING = CoreHighlightMood.HEALING.value, _("治愈")
+    TOUCHING = CoreHighlightMood.TOUCHING.value, _("感动")
+    TENSE = CoreHighlightMood.TENSE.value, _("紧张")
 
 
 class DataOrigin(models.TextChoices):
     """[数据来源]"""
 
-    HUMAN = "human", _("人工")
-    AI_ASR = "ai_asr", _("AI语音识别")
-    AI_LLM = "ai_llm", _("AI大模型")
-    AI_CV = "ai_cv", _("AI视觉算法")
-    AI_OCR = "ai_ocr", _("AI文字识别")
+    HUMAN = CoreDataOrigin.HUMAN.value, _("人工")
+    AI_ASR = CoreDataOrigin.AI_ASR.value, _("AI语音识别")
+    AI_LLM = CoreDataOrigin.AI_LLM.value, _("AI大模型")
+    AI_CV = CoreDataOrigin.AI_CV.value, _("AI视觉算法")
+    AI_OCR = CoreDataOrigin.AI_OCR.value, _("AI文字识别")
 
 
 # ==========================================

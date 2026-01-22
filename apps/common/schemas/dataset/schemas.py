@@ -1,8 +1,9 @@
 import uuid
-from enum import Enum
 from typing import List, Optional
 
 from pydantic import BaseModel, Field
+
+from .enums import Gender, PitchLevel, RoleType, SceneType, ShotType, SliceType, SpeedLevel, VolumeLevel
 
 # ==============================================================================
 # 0. 基础原语 (Primitives & Shared)
@@ -21,48 +22,7 @@ class LabelValue(BaseModel):
 
 # ==============================================================================
 # 1. 对白与音频域 (Dialogue & Audio Domain)
-# 对应 Material.dialogues / Material.identified_characters
 # ==============================================================================
-
-# --- Enums (枚举定义) ---
-
-
-class Gender(str, Enum):
-    MALE = "Male"
-    FEMALE = "Female"
-    UNKNOWN = "Unknown"
-
-
-class PitchLevel(str, Enum):
-    HIGH = "High"
-    MID = "Mid"
-    LOW = "Low"
-
-
-class SpeedLevel(str, Enum):
-    FAST = "Fast"
-    NORMAL = "Normal"
-    SLOW = "Slow"
-
-
-class VolumeLevel(str, Enum):
-    LOUD = "Loud"
-    NORMAL = "Normal"
-    QUIET = "Quiet"
-
-
-class RoleType(str, Enum):
-    """
-    角色类型枚举
-    """
-
-    MAIN = "main"
-    SUPPORTING = "supporting"
-    GUEST = "guest"
-    UNKNOWN = "unknown"
-
-
-# --- Label Wrappers (标签封装) ---
 
 
 class RoleTypeLabel(LabelValue):
@@ -71,22 +31,16 @@ class RoleTypeLabel(LabelValue):
     value: RoleType
 
 
-# --- Models (数据模型) ---
-
-
 class AudioAnalysis(BaseModel):
     """
     [音频特征] 对白声学分析结果。
-    通常由音频分析模型产出，用于辅助情感判断或角色识别。
     """
 
-    # [Optimization] 使用 Enum 替代魔法字符串，确保 Service 层产出符合契约
     gender: Gender = Field(default=Gender.UNKNOWN, description="推测性别")
     pitch_level: PitchLevel = Field(default=PitchLevel.MID, description="音高等级")
     speed_level: SpeedLevel = Field(default=SpeedLevel.NORMAL, description="语速等级")
     volume_level: VolumeLevel = Field(default=VolumeLevel.NORMAL, description="音量等级")
 
-    # 原始数值 (用于调试或更精细的聚类)
     avg_pitch_hz: float = Field(default=0.0, description="平均基频 (Hz)")
     chars_per_sec: float = Field(default=0.0, description="语速 (字/秒)")
     rms_energy: float = Field(default=0.0, description="能量均方根")
@@ -95,7 +49,6 @@ class AudioAnalysis(BaseModel):
 class IdentifiedCharacterItem(BaseModel):
     """
     [角色档案] 识别出的角色信息。
-    存储在 Material.identified_characters 列表中的单元。
     """
 
     name: str = Field(..., description="标准角色名")
@@ -107,9 +60,6 @@ class IdentifiedCharacterItem(BaseModel):
 class SubtitleItem(BaseModel):
     """
     Refinery 全链路标准台词单元。
-
-    1. 对齐 VSS Cloud 的 SubtitleInputItem。
-    2. 作为 Material.dialogues 列表元素的存储标准。
     """
 
     id: str = Field(default_factory=lambda: str(uuid.uuid4()), description="唯一标识UUID")
@@ -124,33 +74,12 @@ class SubtitleItem(BaseModel):
     original_indices: Optional[List[int]] = Field(default=None, description="合并前的原始索引列表")
 
     class Config:
-        extra = "ignore"  # 允许云端返回额外字段但不报错，保持向后兼容
+        extra = "ignore"
 
 
 # ==============================================================================
 # 2. 视觉与关键帧域 (Visual & Keyframe Domain)
-# 对应 Material.keyframe_map
 # ==============================================================================
-
-# --- Enums ---
-
-
-class ShotType(str, Enum):
-    """景别枚举 (基于 VSS Cloud 定义)"""
-
-    ECU = "extreme_close_up"
-    CU = "close_up"
-    MCU = "medium_close_up"
-    MS = "medium_shot"
-    MLS = "medium_long_shot"
-    LS = "long_shot"
-    ELS = "extreme_long_shot"
-    EST = "establishing_shot"
-    UNKNOWN = "unknown"
-    OTHER = "other"
-
-
-# --- Label Wrappers ---
 
 
 class ShotTypeLabel(LabelValue):
@@ -159,13 +88,9 @@ class ShotTypeLabel(LabelValue):
     value: ShotType
 
 
-# --- Models ---
-
-
 class FrameBase(BaseModel):
     """
     [最小单元] 物理帧数据容器。
-    仅包含最基础的时间戳和路径信息。
     """
 
     timestamp: float = Field(..., description="帧在视频中的时间戳（秒）")
@@ -175,15 +100,13 @@ class FrameBase(BaseModel):
 class VisualAnalysis(BaseModel):
     """
     [Cloud API 响应] 视觉分析结果。
-    对应 VSS Cloud Visual Analyzer 的输出结构。
     """
 
-    # [Optimization] 升级为强类型 Label
     shot_type: Optional[ShotTypeLabel] = Field(None, description="Main shot size (Value + Label)")
-    environment: Optional[str] = Field(None, description="Physical environment (e.g., Indoor-Bedroom, Outdoor-Street)")
+    environment: Optional[str] = Field(None, description="Physical environment")
     subject: Optional[str] = None
     action: Optional[str] = None
-    lighting_time: Optional[str] = Field(None, description="Time or lighting characteristics (e.g., Day, Night, Dusk)")
+    lighting_time: Optional[str] = Field(None, description="Time or lighting characteristics")
     visual_mood_tags: List[str] = Field(default_factory=list, description="视觉氛围标签")
 
     class Config:
@@ -193,9 +116,6 @@ class VisualAnalysis(BaseModel):
 class KeyframeItem(FrameBase):
     """
     [核心数据结构] 关键帧完整元数据。
-
-    作为 Material.keyframe_map 的 Value 结构。
-    记录了帧的生命周期：从本地提取 -> 云端同步 -> 视觉分析。
     """
 
     id: str = Field(default_factory=lambda: str(uuid.uuid4()), description="唯一标识UUID")
@@ -203,41 +123,21 @@ class KeyframeItem(FrameBase):
     timestamp: float = Field(..., description="帧在视频中的时间戳（秒）")
     path: str = Field(..., description="相对路径 (本地或云端)")
     digest: Optional[str] = Field(default=None, description="文件内容摘要 (MD5/SHA256)")
-    reason: Optional[str] = Field(
-        default=None, description="抽帧原因：slice_boundary | internal_scene_change | fallback_mid"
-    )
+    reason: Optional[str] = Field(default=None, description="抽帧原因")
     quality_score: Optional[float] = Field(default=None, description="帧质量分数")
-    filter_reason: Optional[str] = Field(default=None, description="被过滤原因：black_frame | white_frame | blurry_frame")
+    filter_reason: Optional[str] = Field(default=None, description="被过滤原因")
     visual_analysis: Optional[VisualAnalysis] = Field(default=None, description="云端 VLM 分析结果")
 
 
 # ==============================================================================
 # 3. 切片域 (Slice Domain)
-# 对应 Material.slices
 # ==============================================================================
-
-# --- Enums ---
-
-
-class SliceType(str, Enum):
-    """
-    切片类型枚举
-    """
-
-    VISUAL_SEGMENT = "visual_segment"
-    DIALOGUE = "dialogue"
-
-
-# --- Label Wrappers ---
 
 
 class SliceTypeLabel(LabelValue):
     """[约束结构] 切片类型标签"""
 
     value: SliceType
-
-
-# --- Models ---
 
 
 class AudioContent(BaseModel):
@@ -249,7 +149,6 @@ class AudioContent(BaseModel):
 class SliceAnalysis(BaseModel):
     """
     [中间产物] 切片级语义分析结果。
-    由 SliceAnalyzer 产出，用于辅助 SliceRegrouper 进行聚类。
     """
 
     narrative_summary: Optional[str] = Field(None, description="切片叙事摘要")
@@ -260,9 +159,6 @@ class SliceAnalysis(BaseModel):
 class Slice(BaseModel):
     """
     [核心容器] 多模态切片。
-
-    Material.slices 的元素结构。
-    将时间轴上的一个片段聚合了视觉、听觉和文本信息。
     """
 
     id: str = Field(default_factory=lambda: str(uuid.uuid4()), description="唯一标识UUID")
@@ -271,7 +167,6 @@ class Slice(BaseModel):
     end_time: float
     type: SliceTypeLabel = Field(..., description="visual_segment | dialogue (Value + Label)")
 
-    # [Phase 1] 引用解耦
     dialogue_ids: List[str] = Field(default_factory=list, description="关联对白UUID列表")
     frame_ids: List[str] = Field(default_factory=list, description="关联关键帧UUID列表")
 
@@ -281,7 +176,6 @@ class Slice(BaseModel):
 
 # ==============================================================================
 # 4. 技术元数据 (Technical Metadata)
-# 对应 Material.tech_meta
 # ==============================================================================
 
 
@@ -292,7 +186,7 @@ class VideoMeta(BaseModel):
 
 
 class TechMeta(BaseModel):
-    """对应 tech_meta，存储 FFprobe 提取的技术元数据"""
+    """对应 tech_meta"""
 
     container: Optional[str] = None
     size: int = 0
@@ -301,38 +195,15 @@ class TechMeta(BaseModel):
 
 # ==============================================================================
 # 5. 场景域 (Scene Domain)
-# 对应 Material.scenes
 # ==============================================================================
-
-# --- Enums ---
-
-
-class SceneType(str, Enum):
-    """
-    场景类型
-    """
-
-    DIALOGUE = "dialogue"
-    ACTION = "action"
-    MONTAGE = "montage"
-    ESTABLISHING = "establishing"
-    EMOTIONAL = "emotional"
-    UNKNOWN = "unknown"
-
-
-# --- Label Wrappers ---
 
 
 class SceneTypeLabel(LabelValue):
     """
     [约束结构] 场景类型标签。
-    强制 value 必须是 SceneType 枚举值。
     """
 
     value: SceneType
-
-
-# --- Models ---
 
 
 class SceneContent(BaseModel):
@@ -344,7 +215,7 @@ class SceneContent(BaseModel):
     location: Optional[str] = Field(None, description="主要地点")
     scene_type: Optional[SceneTypeLabel] = Field(None, description="功能类型 (Value + Label)")
     visual_mood_tags: List[str] = Field(default_factory=list, description="视觉氛围标签")
-    camera_logic: Optional[str] = Field(None, description="运镜/剪辑逻辑 (e.g., Static, Fast cuts)")
+    camera_logic: Optional[str] = Field(None, description="运镜/剪辑逻辑")
     character_dynamics: Optional[str] = Field(None, description="角色张力/关系")
     reason: Optional[str] = Field(None, description="AI 分组/切分的理由")
 
@@ -352,7 +223,6 @@ class SceneContent(BaseModel):
 class Scene(BaseModel):
     """
     [业务聚合结果] 场景单元。
-    由 SliceRegrouper 算子生成，是 Refinery 流程的最终产出之一。
     """
 
     id: str = Field(default_factory=lambda: str(uuid.uuid4()), description="唯一标识UUID")

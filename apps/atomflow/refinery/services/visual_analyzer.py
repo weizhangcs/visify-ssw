@@ -5,9 +5,9 @@ import tempfile
 from pathlib import Path
 from typing import Any, Dict, List
 
+from apps.atomflow.refinery.payloads.visual_analyzer import VisualAnalyzerPayload, VisualAnalyzerResponse
+from apps.atomflow.refinery.payloads.visual_analyzer import VisualFrameInput as ExecVisualFrameInput
 from apps.common.cloud_client import CloudApiService
-from apps.common.schemas.refinery.visual_analyzer import VisualAnalyzerPayload, VisualAnalyzerResponse
-from apps.common.schemas.refinery.visual_analyzer import VisualFrameInput as ExecVisualFrameInput
 
 logger = logging.getLogger(__name__)
 

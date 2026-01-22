@@ -13,7 +13,7 @@ class AudioAnalysis(BaseModel):
     model_config = ConfigDict(extra="ignore")
 
 
-class SubtitleItem(BaseModel):
+class ExecSubtitleItem(BaseModel):
     """
     [Execution Schema] 用于角色识别的字幕项
     """
@@ -50,7 +50,7 @@ class CharacterIdentifierPayload(BaseModel):
 
     # 数据源 (互斥)
     subtitle_file_path: Optional[str] = Field(None, description="Path to subtitle file (PROD)")
-    subtitles: Optional[List[SubtitleItem]] = Field(None, description="Direct subtitle list (DEBUG)")
+    subtitles: Optional[List[ExecSubtitleItem]] = Field(None, description="Direct subtitle list (DEBUG)")
 
     # 调试参数
     service_params: Optional[CharacterIdentifierServiceParams] = Field(default_factory=CharacterIdentifierServiceParams)

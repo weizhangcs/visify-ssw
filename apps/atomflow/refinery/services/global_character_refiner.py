@@ -3,9 +3,10 @@ import logging
 from typing import List
 
 from apps.atomflow.refinery.models import Material
-from apps.atomflow.refinery.schemas import IdentifiedCharacterItem, RoleType, RoleTypeLabel
 from apps.atomflow.refinery.services.character_refiner import CharacterRefinerService
 from apps.common.cloud_client import CloudApiService
+from apps.common.schemas.dataset.enums import RoleType
+from apps.common.schemas.dataset.schemas import IdentifiedCharacterItem, RoleTypeLabel
 
 logger = logging.getLogger(__name__)
 

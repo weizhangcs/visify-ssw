@@ -1,7 +1,7 @@
 import logging
 from typing import Any, Dict, List
 
-from apps.atomflow.refinery.schemas import Scene, SubtitleItem
+from apps.common.schemas.dataset.schemas import Scene, SubtitleItem
 from apps.media_assets.models import Media
 from apps.retrievalhub.schemas import RetrievalResult
 from apps.workflow.annotation.jobs import AnnotationJob

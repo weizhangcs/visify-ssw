@@ -5,10 +5,13 @@ import tempfile
 from pathlib import Path
 from typing import Any, Dict, List
 
+from apps.atomflow.refinery.payloads.character_identifier import AudioAnalysis as ExecAudioAnalysis
+from apps.atomflow.refinery.payloads.character_identifier import (
+    CharacterIdentifierPayload,
+    CharacterIdentifierResponse,
+    ExecSubtitleItem,
+)
 from apps.common.cloud_client import CloudApiService
-from apps.common.schemas.refinery.character_identifier import AudioAnalysis as ExecAudioAnalysis
-from apps.common.schemas.refinery.character_identifier import CharacterIdentifierPayload, CharacterIdentifierResponse
-from apps.common.schemas.refinery.character_identifier import SubtitleItem as ExecSubtitleItem
 
 logger = logging.getLogger(__name__)
 

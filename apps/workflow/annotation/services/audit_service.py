@@ -3,7 +3,7 @@ import logging
 from collections import defaultdict
 from typing import Any, Dict, List
 
-from apps.common.schemas.annotation.workbench import DataOrigin
+from apps.workflow.annotation.schemas import DataOrigin
 
 # 引用 AnnotationService 用于加载 Job 数据
 from .annotation_service import AnnotationService

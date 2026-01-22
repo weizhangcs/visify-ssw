@@ -7,11 +7,12 @@ import uuid
 from pathlib import Path
 from typing import Dict, List, Optional
 
-# 持久化 Schema (用于 Material.dialogue 存储)
-from apps.atomflow.refinery.schemas import SubtitleItem
+from apps.atomflow.refinery.payloads.subtitle_merger import SubtitleItem as ExecSubtitleItem
+from apps.atomflow.refinery.payloads.subtitle_merger import SubtitleMergerPayload, SubtitleMergerResponse
 from apps.common.cloud_client import CloudApiService
-from apps.common.schemas.refinery.subtitle_merger import SubtitleItem as ExecSubtitleItem
-from apps.common.schemas.refinery.subtitle_merger import SubtitleMergerPayload, SubtitleMergerResponse
+
+# 持久化 Schema (用于 Material.dialogue 存储)
+from apps.common.schemas.dataset.schemas import SubtitleItem
 
 logger = logging.getLogger(__name__)
 

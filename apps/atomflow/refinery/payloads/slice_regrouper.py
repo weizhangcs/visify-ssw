@@ -1,7 +1,8 @@
-from enum import Enum
 from typing import Any, Dict, List, Literal, Optional
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
+
+from apps.common.schemas.dataset.schemas import LabelValue
 
 # ==============================================================================
 # 1. 输入侧 Schemas (MultimodalSlice)
@@ -25,7 +26,7 @@ class SubtitleItem(BaseModel):
 
 
 class VisualAnalysisData(BaseModel):
-    # 兼容上游 Visual Analyzer 的输出 (可能是 LabelItem 字典，也可能是旧的字符串)
+    # 兼容上游 Visual Analyzer 的输出
     shot_type: Optional[Any] = None
     environment: Optional[str] = None
     subject: Optional[str] = None
@@ -109,46 +110,11 @@ class SliceRegrouperPayload(BaseModel):
 # ==============================================================================
 
 
-class SceneType(str, Enum):
-    DIALOGUE = "dialogue"
-    ACTION = "action"
-    MONTAGE = "montage"
-    ESTABLISHING = "establishing"
-    EMOTIONAL = "emotional"
-    UNKNOWN = "unknown"
-
-
-# 官方翻译映射表
-SCENE_TYPE_LABELS = {
-    "zh": {
-        SceneType.DIALOGUE: "对话场景",
-        SceneType.ACTION: "动作场景",
-        SceneType.MONTAGE: "蒙太奇",
-        SceneType.ESTABLISHING: "铺垫场景",
-        SceneType.EMOTIONAL: "情感场景",
-        SceneType.UNKNOWN: "未知类型",
-    },
-    "en": {
-        SceneType.DIALOGUE: "Dialogue",
-        SceneType.ACTION: "Action",
-        SceneType.MONTAGE: "Montage",
-        SceneType.ESTABLISHING: "Establishing",
-        SceneType.EMOTIONAL: "Emotional",
-        SceneType.UNKNOWN: "Unknown",
-    },
-}
-
-
-class LabelItem(BaseModel):
-    value: str
-    label: str
-
-
 class SceneContent(BaseModel):
     narrative_action: str = Field(..., description="Core event or physical action.")
     location: str = Field(..., description="Primary location.")
-    # [核心变更] 使用 LabelItem (Value + Label)
-    scene_type: LabelItem = Field(..., description="Functional type of the scene.")
+    # [核心变更] 使用 LabelValue (Value + Label)
+    scene_type: LabelValue = Field(..., description="Functional type of the scene.")
     visual_mood_tags: List[str] = Field(default_factory=list, description="Dominant visual mood tags.")
     camera_logic: str = Field(..., description="Editing/Camera logic summary.")
     character_dynamics: str = Field(..., description="Relationship status or tension.")

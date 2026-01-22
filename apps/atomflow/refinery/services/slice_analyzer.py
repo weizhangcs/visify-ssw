@@ -5,9 +5,9 @@ import tempfile
 from pathlib import Path
 from typing import Any, Dict, List
 
+from apps.atomflow.refinery.payloads.slice_analyzer import MultimodalSlice as ExecMultimodalSlice
+from apps.atomflow.refinery.payloads.slice_analyzer import SliceAnalyzerPayload, SliceAnalyzerResponse
 from apps.common.cloud_client import CloudApiService
-from apps.common.schemas.refinery.slice_analyzer import MultimodalSlice as ExecMultimodalSlice
-from apps.common.schemas.refinery.slice_analyzer import SliceAnalyzerPayload, SliceAnalyzerResponse
 
 logger = logging.getLogger(__name__)
 

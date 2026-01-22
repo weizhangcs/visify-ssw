@@ -5,9 +5,9 @@ import tempfile
 from pathlib import Path
 from typing import Any, Dict, List
 
+from apps.atomflow.refinery.payloads.slice_regrouper import MultimodalSlice as ExecMultimodalSlice
+from apps.atomflow.refinery.payloads.slice_regrouper import SliceRegrouperPayload, SliceRegrouperResponse
 from apps.common.cloud_client import CloudApiService
-from apps.common.schemas.refinery.slice_regrouper import MultimodalSlice as ExecMultimodalSlice
-from apps.common.schemas.refinery.slice_regrouper import SliceRegrouperPayload, SliceRegrouperResponse
 
 logger = logging.getLogger(__name__)
 
@@ -29,7 +29,7 @@ class SliceRegrouperService:
         slices: List[Dict[str, Any]],
         dialogues: List[Dict[str, Any]],
         lang: str,
-    ) -> SliceRegrouperResponse:
+    ) -> Dict[str, Any]:
         """
         执行场景聚类与归纳任务。
 
@@ -40,7 +40,7 @@ class SliceRegrouperService:
             lang: 目标语言代码 ("zh" or "en")。
 
         Returns:
-            SliceRegrouperResponse 对象。
+            Payload 响应字典: {"scenes": [...], "stats": ...}
 
         Raises:
             RuntimeError: 如果任务创建、执行或下载失败。
@@ -119,7 +119,9 @@ class SliceRegrouperService:
                 raise RuntimeError(f"SliceRegrouper: Failed to download result file from {download_url}")
             try:
                 # Use Pydantic validation
-                return SliceRegrouperResponse.model_validate_json(content_bytes.decode("utf-8"))
+                response = SliceRegrouperResponse.model_validate_json(content_bytes.decode("utf-8"))
+                return response.model_dump()
+
             except Exception as e:
                 raise RuntimeError(f"SliceRegrouper: Failed to parse result JSON: {e}")
 
