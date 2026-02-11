@@ -48,7 +48,8 @@ tzdata==2025.2
 wcwidth==0.2.13
 
 # AI & Vector Search
-numpy==1.26.4
+# [优化] 移除 numpy 硬锁定，直接使用底座(Media)或依赖解析(Workbench)的版本
+# numpy==1.26.4
 sentence-transformers
 faiss-cpu
 

@@ -25,20 +25,14 @@ def run_flow_test():
     # 算子化框架必须依赖配置，我们先在数据库创建一个临时的测试规则
     # [Schema验证编排] 聚焦于 Step 1 & 2 的变更验证
     # 假设 Proxy 已存在，跳过 Transcode
+    # [Update] 为了验证 GPU Transcode 和 Frame Probe，我们需要一个完整的链路
     rules_json = [
-        {"seq": 1, "unit_slug": "transcode", "name": "原子转码", "obligation": "REQUIRED"},
-        {"seq": 2, "unit_slug": "probe", "name": "原子探测", "obligation": "REQUIRED", "dependence": [1]},
-        {"seq": 3, "unit_slug": "generate_hls", "name": "HLS切片", "obligation": "REQUIRED", "dependence": [1]},
-        {"seq": 4, "unit_slug": "text_analyze", "name": "文本分析", "obligation": "REQUIRED", "dependence": [3]},
-        {"seq": 5, "unit_slug": "audio_analyze", "name": "声纹分析", "obligation": "REQUIRED", "dependence": [4]},
-        {
-            "seq": 6,
-            "unit_slug": "global_character_refine",
-            "name": "全剧角色统筹",
-            "obligation": "REQUIRED",
-            "scope": "ASSET",
-            "dependence": [5],
-        },  # noqa: E501
+        {"seq": 1, "unit_slug": "transcode", "name": "原子转码(GPU)", "obligation": "REQUIRED"},
+        {"seq": 2, "unit_slug": "probe", "name": "技术探测", "obligation": "REQUIRED", "dependence": [1]},
+        {"seq": 3, "unit_slug": "text_analyze", "name": "文本分析", "obligation": "REQUIRED"},
+        {"seq": 4, "unit_slug": "slice", "name": "切片生成", "obligation": "REQUIRED", "dependence": [2, 3]},
+        {"seq": 5, "unit_slug": "frame_extract", "name": "关键帧抽取", "obligation": "REQUIRED", "dependence": [4]},
+        {"seq": 6, "unit_slug": "frame_probe", "name": "帧质量检测(GPU)", "obligation": "REQUIRED", "dependence": [5]},
     ]
 
     rule, _ = RefineryAtomRule.objects.update_or_create(
@@ -49,7 +43,8 @@ def run_flow_test():
 
     # 2. 准备业务物料 (Material)
     # 直接使用提供的 material_id
-    material_id = "8086af2f-e1e6-4c46-8d4c-ba6278aee84c"
+    # [注意] 请确保此 ID 在你的本地数据库中存在，且关联的 Media 有源视频文件
+    material_id = "92e1add6-2797-4b96-a800-1ba2e431e734"
     try:
         material = Material.objects.get(id=material_id)
     except Material.DoesNotExist:

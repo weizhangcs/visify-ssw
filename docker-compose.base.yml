@@ -30,12 +30,14 @@ services:
     environment:
       - TZ=Asia/Shanghai
 
-  # 1. Web 容器 (轻量级)
+  # 1. Web 容器 (Workbench 镜像)
   web:
-    command: python manage.py runserver 0.0.0.0:8000
+    # 生产环境建议使用具体 tag
+    image: workbench:v1.5.0-alpha
+    command: gunicorn visify_ssw.wsgi:application --bind 0.0.0.0:8000 --workers 3
     ports:
       - "18000:8000"
-    user: root
+    user: appuser
     env_file:
       - .env
     depends_on:
@@ -47,10 +49,11 @@ services:
     environment:
       - TZ=Asia/Shanghai
 
-  # 2. 通用 Worker (轻量级，处理默认队列)
+  # 2. 通用 Worker (Workbench 镜像)
   worker:
+    image: workbench:v1.5.0-alpha
     command: celery -A visify_ssw worker -l info -Q celery,default --concurrency=2
-    user: root
+    user: appuser
     env_file:
       - .env
     depends_on:
@@ -60,19 +63,32 @@ services:
     environment:
       - TZ=Asia/Shanghai
 
-  # 3. [NEW] 媒体算力 Worker (重量级，处理 media_queue)
+  # 3. 媒体算力 Worker (Media 镜像)
   worker-media:
+    image: media:v1.5.0-alpha
     # 显式指定消费 media_queue
-    command: celery -A visify_ssw worker -l info -Q media_queue --concurrency=1
-    user: root
+    # [Fix] 使用 solo 池模式避免 CUDA Fork 崩溃问题
+    command: celery -A visify_ssw worker -l info -Q media_queue --pool=solo
+    user: appuser
     env_file:
       - .env
     depends_on:
       - web
     volumes:
       - ./media_root:/app/media_root
+      # 注意：这里不需要挂载 local_models，因为它们已经烧录在镜像里了
     environment:
       - TZ=Asia/Shanghai
+      # 确保 CUDA 可见
+      - NVIDIA_VISIBLE_DEVICES=all
+      - NVIDIA_DRIVER_CAPABILITIES=compute,utility,video
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
 
   nginx_media_server:
     image: crpi-34v4qt829vtet2cy.cn-hangzhou.personal.cr.aliyuncs.com/vss_base/nginx:1.25-alpine

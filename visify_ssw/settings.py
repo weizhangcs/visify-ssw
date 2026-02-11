@@ -39,6 +39,7 @@ INSTALLED_APPS = [
     "apps.configuration.apps.ConfigurationConfig",
     "apps.workflow.apps.WorkflowConfig",
     "apps.atomflow.apps.AtomflowConfig",
+    "apps.atomflow.dubbing.apps.DubbingConfig",
     "apps.vector",
     # --- APP REGISTRY END ---
     "corsheaders",
@@ -202,6 +203,7 @@ try:
     import numpy  # noqa: F401
 
     CELERY_IMPORTS.append("apps.atomflow.refinery.tasks")
+    CELERY_IMPORTS.append("apps.atomflow.dubbing.tasks")
 except ImportError:
     pass
 
@@ -226,6 +228,7 @@ CELERY_TASK_ROUTES = {
     "apps.workflow.creative.tasks.start_synthesis_task": {"queue": "media_queue"},
     "apps.workflow.creative.tasks.finalize_synthesis_task": {"queue": "media_queue"},
     "apps.atomflow.refinery.tasks.execute_step": {"queue": "media_queue"},
+    "apps.atomflow.dubbing.tasks.execute_dubbing_step": {"queue": "media_queue"},
     # 3. 其他所有任务 (Cloud API请求、回调处理、DB操作) -> 默认走 default 队列
     "*": {"queue": "default"},
 }
@@ -311,6 +314,11 @@ UNFOLD = {
                         "title": "精炼流水线",
                         "icon": "precision_manufacturing",
                         "link": reverse_lazy("admin:atomflow_refineryatompipeline_changelist"),
+                    },
+                    {
+                        "title": "配音流水线",
+                        "icon": "precision_manufacturing",
+                        "link": reverse_lazy("admin:dubbing_dubbingatompipeline_changelist"),
                     },
                 ],
             },

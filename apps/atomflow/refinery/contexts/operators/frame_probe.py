@@ -25,7 +25,11 @@ class FrameProbeContextMixin:
             A dictionary containing the keyframe_map and the media root path.
         """
         # Frame probe requires the keyframe_map to access frame paths
-        return {"keyframe_map": target.keyframe_map, "media_root": str(self.media_root)}
+        return {
+            "keyframe_map": target.keyframe_map,
+            "media_root": str(self.media_root),
+            "use_gpu": True,  # [GPU Test] 开启 GPU 加速 (需 Service 支持)
+        }
 
     def _handle_frame_probe(self, target, result: dict):
         """

@@ -27,7 +27,7 @@ def _run_transcode(payload: dict, target_id: str):
     source_path = Path(payload["source_path"])
     abs_output_path = Path(payload["output_path"])
     abs_output_path.parent.mkdir(parents=True, exist_ok=True)
-    TranscoderService.run(source_path, abs_output_path)
+    TranscoderService.run(source_path, abs_output_path, use_gpu=payload.get("use_gpu", False))
     return {"rel_path": payload["rel_path"]}
 
 
@@ -72,7 +72,11 @@ def _run_frame_extract(payload: dict, target_id: str):
 
 
 def _run_frame_probe(payload: dict, target_id: str):
-    return FrameProberService.run(keyframe_map=payload["keyframe_map"], media_root=Path(payload["media_root"]))
+    return FrameProberService.run(
+        keyframe_map=payload["keyframe_map"],
+        media_root=Path(payload["media_root"]),
+        use_gpu=payload.get("use_gpu", False),
+    )
 
 
 def _run_text_analyze(payload: dict, target_id: str):

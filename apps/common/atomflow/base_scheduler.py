@@ -55,12 +55,12 @@ class BaseAtomScheduler(ABC):
         pass
 
     @classmethod
-    def record_and_dispatch(cls, pipe_ctx: Any, current_seq: int, mode: str, **kwargs):
+    def record_and_dispatch(cls, pipe_ctx: Any, current_seq: int, mode: str, slug: str = None, **kwargs):
         """
         [范式方法] 供 Task 完成时调用：记录当前，并决定是否点火下一跳
         """
         # 1. 记录当前步骤成功 (由 PipelineContext 处理)
-        pipe_ctx.transit_state(current_seq, "SUCCESS", **kwargs)
+        pipe_ctx.transit_state(current_seq, slug, "SUCCESS", **kwargs)
 
         # 2. 模式判定：只有 PROD 模式才会自动寻找并触发下一跳
         if mode == "PROD":

@@ -30,12 +30,10 @@ WORKDIR /app
 RUN pip config set global.index-url $PIP_MIRROR_URL && \
     pip config set global.timeout 1000
 
-# 4. [防御性措施] 离线安装 PyTorch
-# 即使 Workbench 暂时不用 AI，加上这一步也不亏（因为只是读本地文件），
-# 但如果 requirements.base.txt 里万一混入了 AI 库，这一步能救命（避免下载 GPU 版）。
-# [优化] 使用挂载安装，不占用镜像空间
-RUN --mount=type=bind,source=local_packages,target=/tmp/packages \
-    pip install --no-cache-dir /tmp/packages/torch-*.whl /tmp/packages/torchvision-*.whl
+# 4. [关键调整] 在线安装 CPU 版 PyTorch
+# 目的：Workbench 只需要 CPU 推理能力 (Sentence-Transformers)。
+# 必须在安装 requirements.base.txt 之前显式安装 CPU 版，否则 pip 会从 PyPI 拉取包含 CUDA 的巨大安装包(2GB+)。
+RUN pip install --no-cache-dir torch torchvision --index-url https://download.pytorch.org/whl/cpu
 
 # 5. 安装基础依赖
 COPY requirements.base.txt .

@@ -27,7 +27,12 @@ class TranscodeContextMixin:
         rel_path = f"refinery/{target.id}/proxy.mp4"
         abs_output_path = self.media_root / rel_path
 
-        return {"source_path": str(source_path), "output_path": str(abs_output_path), "rel_path": rel_path}
+        return {
+            "source_path": str(source_path),
+            "output_path": str(abs_output_path),
+            "rel_path": rel_path,
+            "use_gpu": True,  # [GPU Test] 开启 GPU 加速
+        }
 
     def _handle_transcode(self, target, result):
         """

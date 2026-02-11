@@ -5,14 +5,14 @@
 services:
   web:
     #image: crpi-34v4qt829vtet2cy.cn-hangzhou.personal.cr.aliyuncs.com/vss_edge/workbench:v1.4.0-alpha.2.hotfix # Define the tag for the built image
-    image: 10.168.1.23:4999/vss_edge/workbench:v1.4.0-alpha.3
+    image: 10.168.1.23:4999/vss-edge/workbench:v1.5.0-alpha
     restart: always
 
   worker:
     #image: crpi-34v4qt829vtet2cy.cn-hangzhou.personal.cr.aliyuncs.com/vss_edge/workbench:v1.4.0-alpha.2.hotfix # Use the same tag
-    image: 10.168.1.23:4999/vss_edge/workbench:v1.4.0-alpha.3
+    image: 10.168.1.23:4999/vss-edge/workbench:v1.5.0-alpha
     restart: always
 
   worker-media:
     #image: crpi-34v4qt829vtet2cy.cn-hangzhou.personal.cr.aliyuncs.com/vss_edge/media:v1.4.0-alpha.2.hotfix  #等待推送后获得完整地址
-    image: 10.168.1.23:4999/vss_edge/media:v1.4.0-alpha.3
+    image: 10.168.1.23:4999/vss-edge/media:v1.5.0-alpha
