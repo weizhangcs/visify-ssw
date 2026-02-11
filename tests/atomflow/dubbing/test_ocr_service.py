@@ -44,7 +44,7 @@ def main():
 
     # --- 4. 准备输入输出 ---
     # [配置] 请确保这里指向一个真实存在的视频文件
-    input_video_path = project_root / "tests" / "resources" / "test_video.mp4"
+    input_video_path = project_root / "tests/testdata/EP01.mp4"
 
     # [智能选择] 如果 gating 测试已经运行过并生成了掩码，优先使用它
     # 这可以模拟 OCR 算子利用语音信息跳过静音帧的优化策略

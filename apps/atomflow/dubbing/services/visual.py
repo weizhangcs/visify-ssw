@@ -3,10 +3,13 @@ import logging
 import os
 import shutil
 from pathlib import Path
+from typing import Optional
 
 import cv2
 import numpy as np
+import onnxruntime as ort
 import pandas as pd
+import torch
 from insightface.app import FaceAnalysis
 from sklearn.cluster import DBSCAN
 from sklearn.preprocessing import Normalizer
@@ -22,13 +25,13 @@ class VisualAnalysisService:
     """
 
     @staticmethod
-    def run(video_path: Path, output_dir: Path, temp_dir: Path) -> str:
+    def run(video_path: Path, output_dir: Path, temp_dir: Path, mask_path: Optional[str] = None) -> str:
         logger.info(f"Visual: Analyzing {video_path.name}...")
         output_dir.mkdir(parents=True, exist_ok=True)
         temp_dir.mkdir(parents=True, exist_ok=True)
 
-        analyzer = VisualAnalyzerHelper(model_dir=constants.INSIGHTFACE_MODEL_DIR)
-        csv_path, _ = analyzer.run(str(video_path), str(output_dir), str(temp_dir))
+        analyzer = VisualAnalyzerHelper(model_dir=constants.INSIGHTFACE_MODEL_DIR, mask_path=mask_path)
+        csv_path, _ = analyzer.run(str(video_path), str(output_dir), str(temp_dir), mask_path)
 
         del analyzer
         utils.cleanup_gpu()
@@ -37,8 +40,11 @@ class VisualAnalysisService:
 
 
 class VisualAnalyzerHelper:
-    def __init__(self, model_dir):
+    def __init__(self, model_dir, mask_path=None):
         # 显式加载 landmark_2d_106 用于嘴型计算
+        # [Optimization] 抑制 ONNX Runtime 的冗长日志
+        ort.set_default_logger_severity(3)
+
         self.app = FaceAnalysis(
             name="buffalo_l",
             root=model_dir,
@@ -47,12 +53,24 @@ class VisualAnalyzerHelper:
         )
         self.app.prepare(ctx_id=0, det_size=(640, 640))
 
-    def run(self, video_path, output_dir, temp_dir):
+        # 加载 Gating Mask (如果提供)
+        self.speech_mask = None
+        self.sr = 16000  # Gating 固定采样率
+        if mask_path and os.path.exists(mask_path):
+            try:
+                logger.info(f"   [Visual] Loading gating mask from {mask_path}...")
+                masks = torch.load(mask_path, map_location="cpu", weights_only=True)
+                if "perception" in masks:
+                    self.speech_mask = masks["perception"].float().numpy().flatten()
+            except Exception as e:
+                logger.warning(f"   [Visual] Failed to load mask: {e}")
+
+    def run(self, video_path, output_dir, temp_dir, mask_path=None):
         cap = utils.FFmpegVideoReader(video_path)
         fps = cap.fps
         # total_frames = cap.total_frames
 
-        SAMPLE_INTERVAL = 3
+        SAMPLE_INTERVAL = 1  # [Optimization] 既然已有 Gating 过滤，有效片段内应逐帧分析以获取更细腻的嘴型/表情数据
         face_full_data = []
         all_embeddings = []
 
@@ -70,6 +88,17 @@ class VisualAnalyzerHelper:
                 break
 
             current_time = frame_idx / fps
+
+            # [Optimization] 语义门控过滤 (如果提供了 Audio Mask)
+            if self.speech_mask is not None:
+                # 映射到音频采样点 (假设 16kHz)
+                sample_idx = int((frame_idx / fps) * self.sr)
+                # 宽松边界检查
+                if 0 <= sample_idx < len(self.speech_mask):
+                    # 阈值判定：如果当前时刻人声概率极低 (<0.1)，则跳过 Visual Analysis
+                    if self.speech_mask[sample_idx] < 0.1:
+                        frame_idx += 1
+                        continue
 
             if frame_idx % SAMPLE_INTERVAL == 0:
                 faces = self.app.get(frame)

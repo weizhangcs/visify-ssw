@@ -97,20 +97,13 @@ def convert_to_ass(json_data: dict, output_ass_path: Path):
         start_str = format_ass_timestamp(start_time)
         end_str = format_ass_timestamp(end_time)
 
-        # 简单的逻辑判断：如果有 refined_text 且不是仅 OCR 忽略的噪音，则作为对白
+        # 简单的逻辑判断：如果有 refined_text 且不是被标记为丢弃的噪音，则作为对白
         # 这里的判断逻辑可以根据实际业务需求调整
-        if text and segment.get("source_of_truth") != "OCR_IGNORED":
+        if text and segment.get("source_of_truth") != "DISCARD_NOISE":
             # Dialogue: 0,0:00:06.40,0:00:07.00,Default,,0,0,0,,快十二点了。
             event_line = f"Dialogue: 0,{start_str},{end_str},Default,,0,0,0,,{text}"  # noqa: E231
             ass_events.append(event_line)
             dialogue_count += 1
-        else:
-            # 作为注释显示被忽略的内容或原始 OCR/ASR
-            ignored_text = segment.get("original_ocr") or segment.get("original_asr") or "IGNORED"
-            ignored_text = str(ignored_text).replace("\n", "\\N")
-            event_line = f"Comment: 0,{start_str},{end_str},Comment,,0,0,0,,{ignored_text}"  # noqa: E231
-            ass_events.append(event_line)
-            comment_count += 1
 
     with open(output_ass_path, "w", encoding="utf-8-sig") as f:
         f.write(ASS_HEADER_TEMPLATE)

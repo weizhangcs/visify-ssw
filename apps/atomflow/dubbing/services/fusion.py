@@ -2,9 +2,10 @@ import logging
 from pathlib import Path
 from typing import Dict, List
 
-import librosa
 import numpy as np
 import pandas as pd
+
+from apps.atomflow.dubbing import utils
 
 logger = logging.getLogger(__name__)
 
@@ -27,7 +28,8 @@ class AudioVisualFusionService:
 class FusionEngineHelper:
     def run(self, metadata, face_csv_path, audio_path):
         df_face = pd.read_csv(face_csv_path)
-        y, sr = librosa.load(audio_path, sr=16000)
+        y = utils.load_audio_ffmpeg(audio_path, sr=16000)
+        sr = 16000
 
         fused_metadata = []
 
