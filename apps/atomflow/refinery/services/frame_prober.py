@@ -2,7 +2,7 @@ import logging
 from pathlib import Path
 from typing import Any, Dict, List, Tuple
 
-from apps.atomflow.refinery.schemas import KeyframeItem
+from apps.common.schemas.dataset.schemas import KeyframeItem
 
 logger = logging.getLogger(__name__)
 

@@ -1,7 +1,7 @@
 from pathlib import Path
 from typing import Dict, List
 
-from apps.atomflow.refinery.schemas import KeyframeItem
+from apps.common.schemas.dataset.schemas import KeyframeItem
 
 
 class FrameExtractContextMixin:
@@ -48,12 +48,29 @@ class FrameExtractContextMixin:
             target: The Material instance.
             result: The keyframe_map dictionary (slice_id -> frame_list).
         """
-        # Ensure keyframe_map stores valid KeyframeItem objects
-        processed_map = {
-            slice_id: [KeyframeItem(**frame_data).model_dump() for frame_data in frames]
-            for slice_id, frames in result.items()
-        }
+        # [Phase 1 Refactor] 移除强制排序和 Index 生成
+        # 理由：VSS Cloud 仅依赖 frame_id (UUID)，且文件名已包含物理顺序。
+        # 强行维护全局 index 成本高且无意义。
+        all_raw_frames = []
+        for frames in result.values():
+            all_raw_frames.extend(frames)
+
+        processed_map = {}
+        final_flat_list = []
+
+        for frame_data in all_raw_frames:
+            # 校验并序列化
+            item = KeyframeItem(**frame_data).model_dump()
+            final_flat_list.append(item)
+
+            # 按 slice_id 分组回填 map
+            s_id = item["slice_id"]
+            if s_id not in processed_map:
+                processed_map[s_id] = []
+            processed_map[s_id].append(item)
+
         target.keyframe_map = processed_map
+        target.frames = final_flat_list
 
     def _check_frame_extract_ready(self, target):
         """

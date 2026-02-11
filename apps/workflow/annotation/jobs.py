@@ -1,5 +1,6 @@
 # 文件路径: apps/workflow/annotation/jobs.py
 
+import copy
 import logging
 
 from django.core.files.storage import FileSystemStorage
@@ -49,6 +50,16 @@ class AnnotationJob(BaseJob):
     # 2. Backup (上一版本/修订前快照)
     data_backup = models.JSONField(default=dict, blank=True, verbose_name="标注数据 (Backup)", help_text="上一次保存或修订前的快照")
 
+    # --- 3. 下游消费数据 (RAG/Vector Source) ---
+    # [Architecture Change] 建立数据冗余，支持 A/B Test 和 Project 隔离。
+    # 这些字段在任务完成或导出时生成，作为下游 RAG 的结构化输入源。
+    dialogues = models.JSONField(default=list, blank=True, verbose_name="对白 (RAG)")
+    scenes = models.JSONField(default=list, blank=True, verbose_name="场景 (RAG)")
+    slices = models.JSONField(default=list, blank=True, verbose_name="切片 (RAG)")
+    frames = models.JSONField(default=list, blank=True, verbose_name="关键帧 (RAG)")
+    captions = models.JSONField(default=list, blank=True, verbose_name="提词 (RAG)")
+    highlights = models.JSONField(default=list, blank=True, verbose_name="高光 (RAG)")
+
     # --- 基础设施: A/B 轮转逻辑 ---
 
     def rotate_and_save(self, new_data: dict, save_to_db: bool = True):
@@ -60,7 +71,7 @@ class AnnotationJob(BaseJob):
         """
         # 1. 备份 Current -> Backup (内存操作)
         if self.data:
-            self.data_backup = self.data
+            self.data_backup = copy.deepcopy(self.data)
 
         # 2. 写入 New -> Current
         self.data = new_data
@@ -116,7 +127,7 @@ class AnnotationJob(BaseJob):
         """
         # 显式触发一次“原地轮转”：把 Current 复制给 Backup，Current 保持不变
         if self.data:
-            self.data_backup = self.data
+            self.data_backup = copy.deepcopy(self.data)
             # 这里不立即 save，因为状态转换通常会在 View 层调 save()
             # 但为了保险起见，如果 django-fsm 不自动保存字段，可能需要手动处理
 

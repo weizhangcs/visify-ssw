@@ -1,44 +1,82 @@
 # Dockerfile.media
-FROM crpi-34v4qt829vtet2cy.cn-hangzhou.personal.cr.aliyuncs.com/vss_base/python:3.12-slim
+# syntax=docker/dockerfile:1
 
+# ==============================================================================
+# 🏗️ Layer 2: Media Worker Node
+# ------------------------------------------------------------------------------
+# Inherits from: VSS Compute Base (Layer 1)
+# Strategy: "The Thin Business Layer" (薄业务层策略)
+#
+# Base Image Includes:
+#   - OS: Ubuntu 22.04
+#   - AI Core: PyTorch 2.5.1+cu121, CUDA 12.x
+#   - Media Core: FFmpeg 6.0 (NVENC), Audio/Visual Models
+#   - Python: 3.12
+#
+# This Image Adds:
+#   - Database Drivers (libpq-dev)
+#   - Business Logic (Django, Celery)
+#   - Application Code
+# ==============================================================================
+FROM 10.168.1.23:4999/vss_base/vss-compute-base:v5
+
+# 1. 定义镜像源参数
 ARG APT_MIRROR=mirrors.aliyun.com
-ARG PIP_MIRROR_URL=https://pypi.tuna.tsinghua.edu.cn/simple/
+ARG PIP_MIRROR_URL=https://mirrors.aliyun.com/pypi/simple/
 
+# 2. 补充业务层系统依赖 (Root 操作)
+USER root
+
+# 替换 APT 源并安装 libpq-dev (PostgreSQL 驱动依赖)
+RUN sed -i "s|archive.ubuntu.com|$APT_MIRROR|g" /etc/apt/sources.list && \
+    sed -i "s|security.ubuntu.com|$APT_MIRROR|g" /etc/apt/sources.list && \
+    apt-get update && \
+    apt-get install -y --no-install-recommends \
+        libpq-dev \
+        git \
+        curl \
+    && apt-get clean && \
+    rm -rf /var/lib/apt/lists/*
+
+# 3. 环境配置
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     PIP_DISABLE_PIP_VERSION_CHECK=1 \
     PIP_NO_CACHE_DIR=1
 
-# [关键] 保留 FFmpeg 及必要的媒体处理库
-RUN sed -i "s|deb.debian.org|$APT_MIRROR|g" /etc/apt/sources.list.d/debian.sources && \
-    sed -i "s|security.debian.org|$APT_MIRROR|g" /etc/apt/sources.list.d/debian.sources && \
-    apt-get update && \
-    apt-get install -y --no-install-recommends \
-        ffmpeg \
-        gcc \
-        libsndfile1 \
-        libpq-dev \
-        fonts-wqy-zenhei \
-        fonts-noto-cjk \
-    && apt-get clean && \
-    rm -rf /var/lib/apt/lists/*
+# 配置全局 pip 源
+RUN pip config set global.index-url $PIP_MIRROR_URL && \
+    pip config set global.timeout 1000
 
 WORKDIR /app
 
-# [变更] 安装全量媒体依赖
+# 4. [兼容性适配] 模型路径映射
+# 底座模型在 /app/models，业务代码可能查找 /app/local_models
+# 创建软链接以保证代码无需修改即可找到模型
+RUN ln -s /app/models /app/local_models
+
+# 5. 安装业务依赖
+# 注意：底座已包含 PyTorch, Numpy, Pandas 等重型库。
+# pip install 时应避免重新安装这些库 (requirements.txt 中最好移除 torch 相关行，或者 pip 会自动检测满足条件)
 COPY requirements.base.txt .
-COPY requirements.media.txt .
+
 RUN pip install --upgrade pip && \
-    pip install --no-cache-dir -i ${PIP_MIRROR_URL} -r requirements.media.txt
+    pip install --no-cache-dir -r requirements.base.txt
 
-# [变更] 离线模式：将本地预下载的模型复制到镜像中
-# 对应 scripts/download_model.py 下载的目录
-COPY local_models /app/local_models
+# 6. 注入业务代码
+# 假设底座中已创建 appuser (uid=1000)，如果没有则需在此处创建。
+# 这里为了保险，显式修正权限。
+COPY --chown=1000:1000 manage.py .
+COPY --chown=1000:1000 visify_ssw/ visify_ssw/
+COPY --chown=1000:1000 apps/ apps/
+COPY --chown=1000:1000 templates/ templates/
+COPY --chown=1000:1000 staticfiles/ staticfiles/
+COPY --chown=1000:1000 static_build/ static_build/
 
-COPY . .
-
-RUN useradd -m appuser && chown -R appuser:appuser /app
+# 7. 切换到非 root 用户运行
+# 假设底座镜像遵循最佳实践创建了 appuser，如果底座是 root 且无用户，可取消注释下一行
+RUN useradd -m -u 1000 appuser
 USER appuser
 
-# Worker 不需要暴露端口，但可以保留 Healthcheck 逻辑(如果需要)
-CMD ["celery", "-A", "visify_ssw", "worker", "-l", "info"]
+# Worker 启动命令
+CMD ["celery", "-A", "visify_ssw", "worker", "-l", "info", "-Q", "media_queue", "--pool=solo"]

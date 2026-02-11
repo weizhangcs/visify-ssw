@@ -22,23 +22,6 @@ class IntegrationSettings(SingletonModel):
     cloud_instance_id = models.CharField(max_length=255, blank=True, null=True, verbose_name="云端实例 ID")
     cloud_api_key = models.CharField(max_length=255, blank=True, null=True, verbose_name="云端 API 密钥")
 
-    # --- [新增字段组 2] Storage Backend Configuration ---
-    STORAGE_BACKEND_CHOICES = (
-        ("local", "本地文件系统 (Local)"),
-        ("s3", "AWS S3 (Cloud Storage)"),
-    )
-    storage_backend = models.CharField(
-        max_length=10, choices=STORAGE_BACKEND_CHOICES, default="local", verbose_name="存储后端"
-    )
-
-    aws_access_key_id = models.CharField(max_length=255, blank=True, null=True, verbose_name="AWS Access Key ID")
-    aws_secret_access_key = models.CharField(
-        max_length=255, blank=True, null=True, verbose_name="AWS Secret Access Key"
-    )
-    aws_storage_bucket_name = models.CharField(max_length=255, blank=True, null=True, verbose_name="AWS Bucket Name")
-    aws_s3_region_name = models.CharField(max_length=255, blank=True, null=True, verbose_name="AWS S3 Region Name")
-    aws_s3_custom_domain = models.URLField(max_length=1024, blank=True, null=True, verbose_name="AWS S3 Custom Domain")
-
     def clean(self):
         super().clean()
         emails = self.superuser_emails.splitlines()

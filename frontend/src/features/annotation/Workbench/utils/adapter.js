@@ -39,9 +39,18 @@ export const transformToTracks = (annotationData) => {
                 // 确保 Timeline 轨道上能看到文字
                 let displayLabel = flatData.label || flatData.narrative_action || flatData.text || `Clip ${index + 1}`;
 
+                // [Debug] 检查 ID 穿透情况
+                const backendId = context.id || item.id;
+                if (!backendId) {
+                    console.warn(`[Adapter] ⚠️ ID Missing for ${key} item at index ${index}. Falling back to generated ID.`, flatData);
+                } else {
+                    // console.debug(`[Adapter] ✅ ID Preserved for ${key}: ${backendId}`);
+                }
+
                 return {
-                    // [关键修正] 确保 ID 绝对唯一，防止 React 渲染失效
-                    id: context.id || item.id || `${key}-${index}-${Date.now()}`,
+                    // [Refinery Integration] 严格使用后端传递的 UUID (context.id 或 item.id)
+                    // 只有在极端异常情况下才 fallback 到自动生成
+                    id: backendId || `gen-${key}-${index}-${Date.now()}`,
                     start: item.start,
                     end: item.end,
                     effectId: effectId,

@@ -49,12 +49,18 @@ class BaseAtomScheduler(ABC):
         return runnable_steps
 
     @classmethod
-    def record_and_dispatch(cls, pipe_ctx: Any, current_seq: int, mode: str, **kwargs):
+    @abstractmethod
+    def dispatch(cls, target_id: Any, step_config: Dict[str, Any]):
+        """具体下发 Celery 任务的实现"""
+        pass
+
+    @classmethod
+    def record_and_dispatch(cls, pipe_ctx: Any, current_seq: int, mode: str, slug: str = None, **kwargs):
         """
         [范式方法] 供 Task 完成时调用：记录当前，并决定是否点火下一跳
         """
         # 1. 记录当前步骤成功 (由 PipelineContext 处理)
-        pipe_ctx.transit_state(current_seq, "SUCCESS", **kwargs)
+        pipe_ctx.transit_state(current_seq, slug, "SUCCESS", **kwargs)
 
         # 2. 模式判定：只有 PROD 模式才会自动寻找并触发下一跳
         if mode == "PROD":
@@ -69,12 +75,6 @@ class BaseAtomScheduler(ABC):
             # DEBUG 模式下，仅记录，不 dispatch
             # 这里可以 log 一个“断点暂停”的信息
             pass
-
-    @classmethod
-    @abstractmethod
-    def dispatch(cls, target_id: Any, step_config: Dict[str, Any]):
-        """具体下发 Celery 任务的实现"""
-        pass
 
     @classmethod
     def _is_optional(cls, seq: str, rules_config: List[Dict]) -> bool:

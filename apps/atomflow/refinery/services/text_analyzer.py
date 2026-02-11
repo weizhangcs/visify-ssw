@@ -3,14 +3,16 @@
 import json
 import logging
 import re
+import uuid
 from pathlib import Path
 from typing import Dict, List, Optional
 
-# 持久化 Schema (用于 Material.dialogue 存储)
-from apps.atomflow.refinery.schemas import SubtitleItem
+from apps.atomflow.refinery.payloads.subtitle_merger import SubtitleItem as ExecSubtitleItem
+from apps.atomflow.refinery.payloads.subtitle_merger import SubtitleMergerPayload, SubtitleMergerResponse
 from apps.common.cloud_client import CloudApiService
-from apps.common.schemas.refinery.subtitle_merger import SubtitleItem as ExecSubtitleItem
-from apps.common.schemas.refinery.subtitle_merger import SubtitleMergerPayload
+
+# 持久化 Schema (用于 Material.dialogue 存储)
+from apps.common.schemas.dataset.schemas import SubtitleItem
 
 logger = logging.getLogger(__name__)
 
@@ -102,7 +104,12 @@ class TextAnalyzerService:
 
                 # 5. 构造强契约 SubtitleItem
                 item = SubtitleItem(
-                    index=index_counter, content=clean_content, start_time=start_sec, end_time=end_sec, speaker=speaker
+                    id=str(uuid.uuid4()),  # [Phase 1] 新增 UUID
+                    index=index_counter,  # Local Index
+                    content=clean_content,
+                    start_time=start_sec,
+                    end_time=end_sec,
+                    speaker=speaker,
                 )
 
                 standardized_list.append(item.model_dump())
@@ -190,6 +197,7 @@ class TextAnalyzerService:
             # 将持久化格式转换为执行格式 (虽然结构相似，但为了严谨进行转换)
             exec_items = [
                 ExecSubtitleItem(
+                    id=s.get("id"),
                     index=s["index"],
                     start_time=s["start_time"],
                     end_time=s["end_time"],
@@ -243,8 +251,15 @@ class TextAnalyzerService:
             dl_success, content_bytes = client.download_task_result(download_url)
             if dl_success:
                 try:
-                    result_json = json.loads(content_bytes.decode("utf-8"))
-                    return result_json.get("merged_subtitles", [])
+                    # [Update] Use Pydantic validation
+                    response = SubtitleMergerResponse.model_validate_json(content_bytes.decode("utf-8"))
+                    merged = [item.model_dump() for item in response.merged_subtitles]
+
+                    # [Defensive] 确保返回结果包含 UUID (如果云端产生新行可能未生成)
+                    for item in merged:
+                        if not item.get("id"):
+                            item["id"] = str(uuid.uuid4())
+                    return merged
                 except Exception as e:
                     logger.error(f"TextAnalyzer: Failed to parse result JSON: {e}")
                     return []

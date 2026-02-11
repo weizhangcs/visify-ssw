@@ -36,6 +36,7 @@ def run_flow_test():
             "unit_slug": "global_character_refine",
             "name": "全剧角色统筹",
             "obligation": "REQUIRED",
+            "scope": "ASSET",
             "dependence": [5],
         },  # noqa: E501
         {"seq": 7, "unit_slug": "slice", "name": "视觉切片", "obligation": "REQUIRED", "dependence": [6]},
@@ -55,7 +56,7 @@ def run_flow_test():
 
     # 2. 准备业务物料 (Material)
     # 自动寻找一个有源视频的 Media，如果未关联 Material 则自动创建
-    media = Media.objects.get(title="001")
+    media = Media.objects.get(title="EP01")
     if not media:
         print("❌ 错误：Media 库中没有可用的视频资源。请先在系统中上传至少一个视频文件。")
         return

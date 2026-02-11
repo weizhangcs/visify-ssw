@@ -3,7 +3,7 @@ import logging
 from collections import defaultdict
 from typing import Any, Dict, List
 
-from apps.common.schemas.annotation.workbench import DataOrigin
+from apps.workflow.annotation.schemas import DataOrigin
 
 # 引用 AnnotationService 用于加载 Job 数据
 from .annotation_service import AnnotationService
@@ -51,6 +51,9 @@ class ArtifactAuditService:
                     if job.status != "COMPLETED":
                         try:
                             job.complete_annotation()
+                            # [New] 触发数据发布 (Publish Artifacts for RAG)
+                            # 确保 Job 包含最新的结构化数据供下游使用
+                            AnnotationService.publish_job_artifacts(job)
                             job.save()
                         except Exception as e:
                             logger.warning(f"Auto-complete job {job.id} failed: {e}")

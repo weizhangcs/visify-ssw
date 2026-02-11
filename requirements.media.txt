@@ -1,7 +1,0 @@
-# 继承基础依赖
--r requirements.base.txt
-
-# Media Processing & Scientific Computing
-pydub==0.25.1
-opencv-python-headless
-librosa

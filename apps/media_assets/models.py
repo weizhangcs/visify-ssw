@@ -165,6 +165,7 @@ class Media(TimeStampedModel):
         """
         确保 URL 是绝对路径 (http/https 开头)。
         如果是相对路径，则拼接 settings.LOCAL_MEDIA_URL_BASE。
+        同时确保路径包含 MEDIA_URL 前缀 (适配 Nginx location /media/)。
         """
         if not url_path:
             return ""
@@ -176,6 +177,15 @@ class Media(TimeStampedModel):
         # 拼接逻辑
         base = settings.LOCAL_MEDIA_URL_BASE.rstrip("/")
         path = url_str.lstrip("/")
+
+        # [Fix] 检查并补全 MEDIA_URL 前缀
+        # Nginx 配置了 location /media/，所以所有资源路径必须以 media/ 开头
+        # 数据库中存储的 hls_playlist 等字段通常是 "refinery/..." 相对路径，缺少 media 前缀
+        media_prefix = settings.MEDIA_URL.strip("/")  # e.g., "media"
+
+        if media_prefix and not path.startswith(f"{media_prefix}/"):
+            path = f"{media_prefix}/{path}"
+
         return f"{base}/{path}"
 
     def get_best_processing_path(self):

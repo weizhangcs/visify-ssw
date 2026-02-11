@@ -1,0 +1,12 @@
+{
+  "zh": {
+    "narrative_action": "剧情",
+    "location": "地点",
+    "visual_mood_tags": "氛围",
+    "scene_type": "类型",
+    "camera_logic": "运镜",
+    "character_dynamics": "关系",
+    "separator": "；",
+    "kv_separator": "："
+  }
+}

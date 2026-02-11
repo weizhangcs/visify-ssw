@@ -14,14 +14,8 @@ try:
 except ImportError:
     librosa = None
 
-from apps.atomflow.refinery.schemas import (  # noqa: E402
-    AudioAnalysis,
-    Gender,
-    PitchLevel,
-    SpeedLevel,
-    SubtitleItem,
-    VolumeLevel,
-)
+from apps.common.schemas.dataset.enums import Gender, PitchLevel, SpeedLevel, VolumeLevel  # noqa: E402
+from apps.common.schemas.dataset.schemas import AudioAnalysis, SubtitleItem  # noqa: E402
 
 logger = logging.getLogger(__name__)
 

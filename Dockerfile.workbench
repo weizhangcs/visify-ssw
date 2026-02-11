@@ -1,16 +1,20 @@
 # Dockerfile.workbench
-# 基础镜像保持一致
+# syntax=docker/dockerfile:1
 FROM crpi-34v4qt829vtet2cy.cn-hangzhou.personal.cr.aliyuncs.com/vss_base/python:3.12-slim
 
+# 1. 统一镜像源参数
 ARG APT_MIRROR=mirrors.aliyun.com
-ARG PIP_MIRROR_URL=https://pypi.tuna.tsinghua.edu.cn/simple/
+ARG PIP_MIRROR_URL=https://mirrors.aliyun.com/pypi/simple/
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     PIP_DISABLE_PIP_VERSION_CHECK=1 \
     PIP_NO_CACHE_DIR=1
 
-# [变更] 移除 ffmpeg，仅保留 Web/DB 必要的系统库
+# [优化] 尽早创建用户
+RUN useradd -m appuser
+
+# 2. 系统依赖 (保持精简，但换源)
 RUN sed -i "s|deb.debian.org|$APT_MIRROR|g" /etc/apt/sources.list.d/debian.sources && \
     sed -i "s|security.debian.org|$APT_MIRROR|g" /etc/apt/sources.list.d/debian.sources && \
     apt-get update && \
@@ -22,14 +26,36 @@ RUN sed -i "s|deb.debian.org|$APT_MIRROR|g" /etc/apt/sources.list.d/debian.sourc
 
 WORKDIR /app
 
-# [变更] 仅复制和安装基础依赖
+# 3. [关键优化] 全局配置 pip 源 (解决依赖下载超时)
+RUN pip config set global.index-url $PIP_MIRROR_URL && \
+    pip config set global.timeout 1000
+
+# 4. [关键调整] 在线安装 CPU 版 PyTorch
+# 目的：Workbench 只需要 CPU 推理能力 (Sentence-Transformers)。
+# 必须在安装 requirements.base.txt 之前显式安装 CPU 版，否则 pip 会从 PyPI 拉取包含 CUDA 的巨大安装包(2GB+)。
+RUN pip install --no-cache-dir torch torchvision --index-url https://download.pytorch.org/whl/cpu
+
+# 5. 安装基础依赖
 COPY requirements.base.txt .
+# 此时不需要再加 -i 参数
 RUN pip install --upgrade pip && \
-    pip install --no-cache-dir -i ${PIP_MIRROR_URL} -r requirements.base.txt
+    pip install --no-cache-dir -r requirements.base.txt
 
-COPY . .
+# [变更] 离线模式：将本地预下载的模型复制到镜像中
+# 对应 scripts/download_model.py 下载的目录
+# [优化] COPY --chown
+COPY --chown=appuser:appuser local_models /app/local_models
 
-RUN useradd -m appuser && chown -R appuser:appuser /app
+# [优化] 显式拷贝，避免重复拷贝 local_models
+COPY --chown=appuser:appuser manage.py .
+COPY --chown=appuser:appuser visify_ssw/ visify_ssw/
+COPY --chown=appuser:appuser apps/ apps/
+COPY --chown=appuser:appuser templates/ templates/
+COPY --chown=appuser:appuser staticfiles/ staticfiles/
+COPY --chown=appuser:appuser static_build/ static_build/
+
+# 如果有其他目录(如 templates, static)请在此处添加
+
 USER appuser
 
 HEALTHCHECK --interval=30s --timeout=3s \

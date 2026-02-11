@@ -38,12 +38,13 @@ class VectorIndexerService:
         return cls.MODEL_NAME
 
     @staticmethod
-    def run(slices: List[Dict[str, Any]], output_path: Path) -> str:
+    def run(slices: List[Dict[str, Any]], dialogues: List[Dict[str, Any]], output_path: Path) -> str:
         """
         执行索引构建。
 
         Args:
             slices: 切片数据列表 (Material.slices)。
+            dialogues: 对白数据 (SSOT)。
             output_path: 索引文件输出绝对路径 (.pkl)。
 
         Returns:
@@ -57,6 +58,9 @@ class VectorIndexerService:
             raise RuntimeError("VectorIndexService: 缺少 faiss-cpu 或 sentence-transformers 依赖")
 
         logger.info(f"VectorIndex: Starting indexing for {len(slices)} slices...")
+
+        # [Phase 1] Build Lookup Map
+        dialogue_map = {d["id"]: d for d in dialogues if d.get("id")}
 
         # 1. 文本化 (Textification)
         corpus = []
@@ -80,9 +84,14 @@ class VectorIndexerService:
             if tags:
                 text_parts.append(f"Tags: {', '.join(tags)}")
 
-            # [新增] 包含切片内的对白文本 (扁平化处理)
+            # [Phase 1] Hydrate & Flatten Dialogue Text
             # 业务价值：解说词往往会呼应视频里的台词 (e.g. "正如他所说...")
-            text_contents = s.get("text_contents", [])
+            d_ids = s.get("dialogue_ids", [])
+            text_contents = []
+            for d_id in d_ids:
+                if d_id in dialogue_map:
+                    text_contents.append(dialogue_map[d_id])
+
             if text_contents:
                 dialogue_text = " ".join([t.get("content", "") for t in text_contents if t.get("content")])
                 if dialogue_text:

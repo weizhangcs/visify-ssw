@@ -5,10 +5,9 @@ import tempfile
 from pathlib import Path
 from typing import Any, Dict, List
 
-from apps.atomflow.refinery.schemas import ShotType
+from apps.atomflow.refinery.payloads.visual_analyzer import VisualAnalyzerPayload, VisualAnalyzerResponse
+from apps.atomflow.refinery.payloads.visual_analyzer import VisualFrameInput as ExecVisualFrameInput
 from apps.common.cloud_client import CloudApiService
-from apps.common.schemas.refinery.visual_analyzer import VisualAnalyzerPayload
-from apps.common.schemas.refinery.visual_analyzer import VisualFrameInput as ExecVisualFrameInput
 
 logger = logging.getLogger(__name__)
 
@@ -29,7 +28,7 @@ class VisualAnalyzerService:
         client: CloudApiService,
         frames: List[Dict[str, Any]],
         lang: str,
-    ) -> Dict[str, Any]:
+    ) -> VisualAnalyzerResponse:
         """
         执行视觉分析任务。
 
@@ -39,7 +38,7 @@ class VisualAnalyzerService:
             lang: 目标语言代码 ("zh" or "en")。
 
         Returns:
-            分析结果字典 (包含 annotated_frames 列表)。
+            VisualAnalyzerResponse 对象。
 
         Raises:
             RuntimeError: 如果任务创建、执行或下载失败。
@@ -106,38 +105,8 @@ class VisualAnalyzerService:
             dl_success, content_bytes = client.download_task_result(download_url)
             if not dl_success:
                 raise RuntimeError(f"VisualAnalyzer: Failed to download result file from {download_url}")
-            try:
-                data = json.loads(content_bytes.decode("utf-8"))
 
-                # [Adapter] Adapt Cloud response to Local Schema (Enum/Label)
-                # Cloud returns shot_type as string, we need to convert it to ShotTypeLabel
-                annotated_frames = data.get("annotated_frames", [])
-                for item in annotated_frames:
-                    va = item.get("visual_analysis", {})
-                    if va and "shot_type" in va:
-                        raw_shot = va["shot_type"]
-                        if isinstance(raw_shot, str):
-                            va["shot_type"] = VisualAnalyzerService._get_shot_type_label(raw_shot, lang)
-
-                return data
-            except Exception as e:
-                raise RuntimeError(f"VisualAnalyzer: Failed to parse result JSON: {e}")
+            # Use Pydantic validation
+            return VisualAnalyzerResponse.model_validate_json(content_bytes.decode("utf-8"))
 
         raise RuntimeError("VisualAnalyzer: Task completed but no download_url provided.")
-
-    @staticmethod
-    def _get_shot_type_label(value: str, lang: str = "zh") -> Dict[str, str]:
-        """Helper to construct ShotTypeLabel with i18n."""
-        labels = {
-            ShotType.ECU: {"zh": "大特写", "en": "Extreme Close Up"},
-            ShotType.CU: {"zh": "特写", "en": "Close Up"},
-            ShotType.MCU: {"zh": "中特写", "en": "Medium Close Up"},
-            ShotType.MS: {"zh": "中景", "en": "Medium Shot"},
-            ShotType.MLS: {"zh": "中远景", "en": "Medium Long Shot"},
-            ShotType.LS: {"zh": "全景", "en": "Long Shot"},
-            ShotType.ELS: {"zh": "大远景", "en": "Extreme Long Shot"},
-            ShotType.EST: {"zh": "建立镜头", "en": "Establishing Shot"},
-            ShotType.OTHER: {"zh": "其他", "en": "Other"},
-        }
-        label_text = labels.get(value, {}).get(lang, "Unknown")
-        return {"value": value, "label": label_text}

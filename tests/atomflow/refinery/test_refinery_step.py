@@ -23,21 +23,28 @@ def run_flow_test():
 
     # 1. 物理落地规则 (Rule)
     # 算子化框架必须依赖配置，我们先在数据库创建一个临时的测试规则
-    # 全量编排：Transcode -> Probe -> HLS -> Text -> Char -> Slicing -> Frame -> Sync
+    # [Schema验证编排] 聚焦于 Step 1 & 2 的变更验证
+    # 假设 Proxy 已存在，跳过 Transcode
+    # [Update] 为了验证 GPU Transcode 和 Frame Probe，我们需要一个完整的链路
     rules_json = [
-        {"seq": 4, "unit_slug": "text_analyze", "name": "文本分析", "obligation": "REQUIRED"},
-        {"seq": 5, "unit_slug": "audio_analyze", "name": "声纹分析", "obligation": "REQUIRED", "dependence": [4]},
+        {"seq": 1, "unit_slug": "transcode", "name": "原子转码(GPU)", "obligation": "REQUIRED"},
+        {"seq": 2, "unit_slug": "probe", "name": "技术探测", "obligation": "REQUIRED", "dependence": [1]},
+        {"seq": 3, "unit_slug": "text_analyze", "name": "文本分析", "obligation": "REQUIRED"},
+        {"seq": 4, "unit_slug": "slice", "name": "切片生成", "obligation": "REQUIRED", "dependence": [2, 3]},
+        {"seq": 5, "unit_slug": "frame_extract", "name": "关键帧抽取", "obligation": "REQUIRED", "dependence": [4]},
+        {"seq": 6, "unit_slug": "frame_probe", "name": "帧质量检测(GPU)", "obligation": "REQUIRED", "dependence": [5]},
     ]
 
     rule, _ = RefineryAtomRule.objects.update_or_create(
-        slug="refinery_full_flow_v2",
-        defaults={"name": "Refinery步进测试规则 V2", "rules_config": rules_json, "mode": "PROD"},
+        slug="refinery_schema_test_v1",
+        defaults={"name": "Refinery Schema验证规则", "rules_config": rules_json, "mode": "PROD"},
     )
     print(f"[*] 规则已就绪: {rule.slug} (步骤数: {rule.step_count})")
 
     # 2. 准备业务物料 (Material)
     # 直接使用提供的 material_id
-    material_id = "81eeecd7-4b26-4920-b0b0-e4c5c114ff26"
+    # [注意] 请确保此 ID 在你的本地数据库中存在，且关联的 Media 有源视频文件
+    material_id = "92e1add6-2797-4b96-a800-1ba2e431e734"
     try:
         material = Material.objects.get(id=material_id)
     except Material.DoesNotExist:
@@ -104,9 +111,16 @@ def run_flow_test():
         # 成功判定
         if target_steps.issubset(completed_slugs):
             print("\n🎉 链路验证成功！所有步骤均已完成。")
-            print(f"Proxy Path: {material.proxy_video}")
-            print(f"HLS Path: {material.hls_playlist}")
-            print(f"Duration: {material.duration}")
+            print("-" * 30)
+            print(f"Dialogues Count: {len(material.dialogues)}")
+            print(f"Slices Count: {len(material.slices)}")
+            print(f"Frames Count (Flat): {len(material.frames)}")
+            if material.slices:
+                print(f"Sample Slice Refs: DialogueIDs={len(material.slices[0].get('dialogue_ids', []))}")
+                print(f"Slice Analysis: {bool(material.slices[0].get('slice_analysis'))}")
+            print(f"Scenes Count: {len(material.scenes)}")
+            print(f"Vector Index Path: {material.slice_vector_index_path}")
+            print("-" * 30)
             return
 
     print("\n⚠️ 测试超时！Worker 可能未响应或处理过慢。")

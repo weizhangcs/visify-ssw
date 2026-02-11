@@ -2,10 +2,12 @@
 import logging
 import re
 import subprocess
+import uuid
 from pathlib import Path
 from typing import Dict, List
 
-from apps.atomflow.refinery.schemas import Slice, SliceType, SubtitleItem
+from apps.common.schemas.dataset.enums import SliceType
+from apps.common.schemas.dataset.schemas import Slice
 
 logger = logging.getLogger(__name__)
 
@@ -256,7 +258,8 @@ class SlicerService:
             type_slug = seg["type"]
             type_obj = SlicerService._get_slice_type_label(type_slug, lang)
             slice_obj = Slice(
-                slice_id=i + 1,
+                id=str(uuid.uuid4()),  # [Phase 1] UUID
+                index=i,  # [Phase 1] Local Index (0-based)
                 start_time=round(seg["start"], 3),
                 end_time=round(seg["end"], 3),
                 type=type_obj,
@@ -270,14 +273,16 @@ class SlicerService:
         for m_slice in multimodal_slices:
             if m_slice.type.value == SliceType.DIALOGUE:
                 # 筛选出时间戳落在该切片内的所有原始字幕行
-                contained_subtitles = []
+                # [Phase 1] 改为存储 ID 引用
+                contained_ids = []
                 for sub_item_data in original_dialogues:
                     sub_start = sub_item_data.get("start_time", 0)
                     if m_slice.start_time <= sub_start < m_slice.end_time:
-                        # 使用 Pydantic 模型进行校验和实例化
-                        contained_subtitles.append(SubtitleItem(**sub_item_data))
+                        d_id = sub_item_data.get("id")
+                        if d_id:
+                            contained_ids.append(d_id)
 
-                m_slice.text_contents = contained_subtitles
+                m_slice.dialogue_ids = contained_ids
 
         # 返回序列化后的字典列表
         return [s.model_dump() for s in multimodal_slices]

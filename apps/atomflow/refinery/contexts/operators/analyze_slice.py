@@ -20,6 +20,8 @@ class AnalyzeSliceContextMixin:
         return {
             "slices": target.slices,
             "keyframe_map": target.keyframe_map,
+            # [Phase 1] 注入 SSOT 对白数据，供 Service 进行 ID 反查 (Hydration)
+            "dialogues": target.dialogues,
             "lang": lang,
         }
 

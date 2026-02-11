@@ -4,7 +4,8 @@ from django.db import models
 from django.utils.translation import gettext_lazy as _
 
 from apps.workflow.common.baseProject import BaseProject
-from apps.workflow.inference.projects import InferenceProject
+
+# from apps.workflow.inference.projects import InferenceProject
 
 
 class CreativeProject(BaseProject):
@@ -40,9 +41,9 @@ class CreativeProject(BaseProject):
 
     # --- 字段定义 ---
 
-    inference_project = models.ForeignKey(
-        InferenceProject, on_delete=models.CASCADE, related_name="creative_projects", verbose_name=_("关联推理项目")
-    )
+    # inference_project = models.ForeignKey(
+    # InferenceProject, on_delete=models.CASCADE, related_name="creative_projects", verbose_name=_("关联推理项目")
+    # )
 
     # [新增] 类型字段
     project_type = models.CharField(max_length=20, choices=Type.choices, default=Type.DEFAULT, verbose_name=_("项目类型"))

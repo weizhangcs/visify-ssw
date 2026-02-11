@@ -1,21 +1,19 @@
-# docker-compose.local.yml
-# This file is for the local development environment. It overrides the base configuration to build from local source.
-
+# docker-compose.dev.yml
 services:
   db:
     ports:
-      - "5432:5432"
+      - "15432:5432"
 
   web:
     build:
       context: .
-      dockerfile: Dockerfile.workbench  # <--- 明确指定
+      dockerfile: Dockerfile.workbench
     volumes:
       - .:/app
 
   redis:
     ports:
-      - "6379:6379"
+      - "16379:6379"
 
   worker:
     build:
@@ -24,10 +22,24 @@ services:
     volumes:
       - .:/app
 
-  # [重点] Media Worker (使用重量级 Dockerfile)
+  # [重点] Media Worker
   worker-media:
     build:
       context: .
-      dockerfile: Dockerfile.media    # <--- 关键：开发环境也要构建这个特定的镜像
+      dockerfile: Dockerfile.media
+      # [移除] args: USE_GPU: true -> 底座已包含，无需构建参数
     volumes:
       - .:/app
+      # [关键修复] 防止宿主机挂载覆盖镜像内的软链接
+      # 这告诉 Docker：保留镜像中 /app/local_models 的内容（即指向 /app/models 的软链接），不要用宿主机的目录覆盖它
+      - /app/local_models
+      # [新增修复] 保护镜像内的模型目录不被宿主机挂载覆盖
+      # 这一步至关重要，否则 .:/app 会导致容器看不到镜像里预装的 /app/models
+      - /app/models
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]

@@ -18,7 +18,12 @@ class VectorIndexContextMixin:
         rel_path = f"refinery/{target.id}/index.pkl"
         abs_output_path = self.media_root / rel_path
 
-        return {"slices": target.slices, "output_path": str(abs_output_path), "rel_path": rel_path}
+        return {
+            "slices": target.slices,
+            "dialogues": target.dialogues,  # [Phase 1] 注入 SSOT
+            "output_path": str(abs_output_path),
+            "rel_path": rel_path,
+        }
 
     def _handle_vector_index(self, target, result):
         """
